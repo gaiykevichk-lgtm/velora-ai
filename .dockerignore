@@ -1,0 +1,11 @@
+node_modules
+.next
+.next-build
+.next-preview
+.next-editorial
+.next-test
+.next-test2
+.next-local
+.env*
+*.log
+.git

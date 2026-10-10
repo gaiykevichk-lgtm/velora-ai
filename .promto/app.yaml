@@ -1,0 +1,13 @@
+{
+  "schema": "promto.app/v1",
+  "project_id": "cb83ce82-9e13-4645-a2d0-84432c9e8394",
+  "publication": {
+    "provider": "timeweb_vm",
+    "delivery": "promto_https_proxy",
+    "service_id": "9286193",
+    "service_name": "cloud-server",
+    "url": "https://app-8003b0293e89b9ff3bd2533d85f0ecfd.promto.site",
+    "origin_url": "http://200.165.230.148",
+    "published_at": "2026-10-07T15:12:14.800675+00:00"
+  }
+}

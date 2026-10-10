@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+:root {
+	/* Vidorya palette */
+	--background: #170d06;
+	--foreground: #ffffff;
+	--card: #1f140b;
+	--card-foreground: #ffffff;
+	--popover: #1f140b;
+	--popover-foreground: #ffffff;
+	--primary: #ffe4a6;
+	--primary-foreground: #170d06;
+	--secondary: #2a1c10;
+	--secondary-foreground: #ffe4a6;
+	--muted: #2a1c10;
+	--muted-foreground: #b8ac90;
+	--accent: #f54900;
+	--accent-foreground: #ffffff;
+	--accent-bright: #f3913e;
+	--accent-soft: #ffe4a6;
+	--accent-deep: #e93e3a;
+	--destructive: #ff3355;
+	--success: #00a447;
+	--warning: #ff9000;
+	--border: #3a2a1a;
+	--border-light: #523c27;
+	--input: #2a1c10;
+	--ring: #ffe4a6;
+	--gold: #ffe4a6;
+	--text-body: #b8ac90;
+	--text-grey: #8a7e6f;
+	--gradient-orange: linear-gradient(
+		104.5deg,
+		#f3913e 2.86%,
+		#f54900 54.24%,
+		#e93e3a 95.32%
+	);
+	--gradient-card: linear-gradient(180deg, #23160c 0%, #170d06 100%);
+	--radius: 1rem;
+
+	/* Legacy mapping compatibility */
+	--ink: #ffffff;
+	--cream: #170d06;
+	--line: #3a2a1a;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+	background-color: var(--background);
+	color: var(--foreground);
+}
+
+body {
+	margin: 0;
+	background: var(--background);
+	color: var(--foreground);
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+		Arial, sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+a {
+	text-decoration: none;
+	color: inherit;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: #170d06;
+}
+
+::-webkit-scrollbar-thumb {
+	background: #3a2a1a;
+	border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: #523c27;
+}

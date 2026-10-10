@@ -1,0 +1,31 @@
+# Velora — product brief and architecture
+
+## Goal
+English-language AI workspace for text conversations, image creation/editing, and video creation from a prompt or reference image. Inspired by the category of multi-model AI aggregators, but with an original visual identity and UI. No third-party logos or copied layout/assets.
+
+## Requirements
+- Public landing and app workspace; responsive English UI with separate Text, Image, Video workflows.
+- Sign-up/sign-in, private conversations and generation history, persistent in external PostgreSQL.
+- Curated task presets with editable prompt and per-mode settings.
+- Server-only provider secrets. No fake generations when credentials are missing; clear configuration errors.
+- Text via OpenAI-compatible chat completions; image via OpenAI-compatible images generation (optional edit endpoint for reference uploads); video via a configurable asynchronous provider adapter with submit/status endpoint contract.
+- Input validation, session cookie, per-user ownership checks, reasonable payload limits and rate limits for production integration.
+- Future commercial release: billing, moderation, abuse prevention, object storage for durable assets, provider pricing reconciliation, webhook verification and operations monitoring before public launch.
+
+## Architecture
+Next.js App Router + TypeScript + Tailwind; server route handlers for authentication, workspaces and generation; PostgreSQL (`DATABASE_URL`) for users, sessions, workspaces, runs. Production uses external PostgreSQL and remains stateless; no SQLite. For local integration checks only, `VELORA_TEST_DB=memory` activates `pg-mem` when `DATABASE_URL` is empty. This is an ephemeral, process-local test double, not a persistence replacement: accounts, sessions and runs disappear on restart and may reset during development reloads. `lib/provider.ts` is an adapter boundary, `lib/db.ts` connection pool, `lib/auth.ts` session validation. Browser never receives provider credentials. Reference media accepted as bounded data URL in server request for image edit or video adapter; production storage and input scanning are a deployment prerequisite.
+
+## Provider contracts
+Text: Gemini 3.8 Flash via Promto `/chat/completions` JSON. Image: Qwen Image 3 Pro via `/images/generations`; reference editing uses `/chat/completions` with an `image_url` content item. Video: Hailuo 3 via async `/videos` submit at 2K with a first-frame image when supplied; status uses `VIDEO_STATUS_URL` with `{id}`. If the provider returns no directly playable URL, an authenticated `/api/video-content` route fetches its `/content?index=0` response after checking the run owner. All model IDs, gateway URLs and server-side keys are configured through the corresponding `TEXT_*`, `IMAGE_*` and `VIDEO_*` variables.
+
+## Setup and commands
+`npm install`, `npm run db:setup` (requires real `DATABASE_URL`), `npm run dev`, `npm run build`, `npm test`. Set values from `.env.example` in gitignored `.env`/`.env.local`; never commit secrets. Authenticated use requires either external PostgreSQL in `DATABASE_URL`, or the explicitly opted-in ephemeral `VELORA_TEST_DB=memory` for local testing. All provider variables are server-side, never prefixed `NEXT_PUBLIC_`.
+
+## Editorial expansion (September 2026)
+Reviewed the public structure of mashagpt.ru (home, FAQ, rates, business, contacts, downloads, blog, privacy and offer) as an information-architecture reference only. Velora keeps its own English-language editorial design and original copy. Shared header/footer now connect `/about`, `/guide`, `/faq`, `/availability`, `/privacy`, `/terms` and the studio. These pages explain the actual project capabilities, provider and PostgreSQL requirements, sample-media provenance and pre-launch gaps. The privacy and use pages are informational drafts, not a legal policy or binding offer. No invented pricing, support address, mobile app, vendor catalogue or commercial claims. Before public launch: confirm operator/contact, legal terms, data retention, provider disclosures and commercial model. Run `npm test` and `npm run build` to verify routes; preview with the running Next.js dev server.
+
+## Status / limits
+The first public site and workspace UI and API routes are implemented. `/` is a visual editorial landing with distinct Velora copy, modes, inspiration gallery, sample video and direct links into `/studio`; the latter now shares the landing's editorial palette and typography, with responsive Chat/Image/Video tabs, editable prompt starters, clearly attributed reference photo/video samples, reference upload for image/video, video settings, authenticated workspace history and clear configuration errors. Sample photography is from Wikimedia Commons with per-image attribution/source links; the video is an MDN CC0 demonstration clip. These examples are not represented as AI output. Design direction takes inspiration from the editorial structure of an AI aggregator, without copying its brand, assets, statistics, pricing or product claims. Tests and production build pass. In the current local test configuration, `pg-mem` allows temporary account/session/workspace/run checks and the provider keys enable live generation tests. Real text, image and video API flows were exercised previously, including Hailuo completion and video-content delivery; the test database resets when the server process stops. External PostgreSQL remains necessary for durable authenticated use. Public launch requires security/load testing, provider-specific video contract confirmation, durable storage and business decisions for pricing/billing. Publishing or paid infrastructure requires separate approval.
+
+## AI photography showcase
+Added eight original 2K AI-generated photographs via Promto (Gemini 3.1 Flash Image Preview). Four appear on the homepage; all eight are available on `/examples`. Images are served from permanent Promto asset CDN URLs and optimized by Next Image with bounded remote patterns and responsive sizes. Original generation files remain at their canonical workspace paths. Labels distinguish these examples from studio provider output. This update changes showcase media only, not provider credentials, billing or database behavior.
