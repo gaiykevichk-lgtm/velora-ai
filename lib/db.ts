@@ -41,16 +41,32 @@ async function memoryDb(): Promise<Queryable> {
 	return globalThis.__veloraMemDb;
 }
 
+// Inside Render the managed Postgres is reachable on the private network via
+// its short resource name (no TLS required). A DATABASE_URL that still points
+// at the public `*.frankfurt-postgres.render.com` host also works, but is more
+// fragile; when we detect Render runtime, prefer the internal hostname.
+export function normalizeConnectionString(raw: string): string {
+	const onRender =
+		process.env.RENDER === "true" || Boolean(process.env.RENDER_SERVICE_ID);
+	if (!onRender) return raw;
+	return raw.replace(
+		/(@)([a-z0-9-]+)\.[a-z0-9-]*postgres\.render\.com(?=[:/])/i,
+		"$1$2",
+	);
+}
+
 export function db(): Pool | Queryable {
 	if (!process.env.DATABASE_URL)
 		throw new ConfigurationError(
 			"DATABASE_URL is not configured yet. Account and saved history require PostgreSQL.",
 		);
 	if (!pool || !(pool instanceof Pool)) {
-		const connectionString = process.env.DATABASE_URL;
-		// Render Postgres (external hostnames) requires TLS. Inside Render's own
-		// network plain TCP works too, but external URLs are the common case —
-		// enable TLS automatically so managed DATABASE_URL values just work.
+		const connectionString = normalizeConnectionString(
+			process.env.DATABASE_URL,
+		);
+		// Render Postgres (external hostnames) requires TLS. Enable it
+		// automatically so managed DATABASE_URL values just work; the internal
+		// short hostname needs no TLS and is matched by the regex below.
 		const needsSsl = /render\.com|[?&]sslmode=require|[?&]ssl=true/i.test(
 			connectionString,
 		);

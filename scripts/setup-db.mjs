@@ -3,11 +3,19 @@ if (!process.env.DATABASE_URL) {
 	console.error("DATABASE_URL is required");
 	process.exit(1);
 }
+const onRender =
+	process.env.RENDER === "true" || Boolean(process.env.RENDER_SERVICE_ID);
+const connectionString = onRender
+	? process.env.DATABASE_URL.replace(
+			/(@)([a-z0-9-]+)\.[a-z0-9-]*postgres\.render\.com(?=[:/])/i,
+			"$1$2",
+		)
+	: process.env.DATABASE_URL;
 const needsSsl = /render\.com|[?&]sslmode=require|[?&]ssl=true/i.test(
-	process.env.DATABASE_URL,
+	connectionString,
 );
 const pool = new pg.Pool({
-	connectionString: process.env.DATABASE_URL,
+	connectionString,
 	...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 try {
