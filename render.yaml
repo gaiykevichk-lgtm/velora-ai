@@ -1,0 +1,45 @@
+services:
+  - type: web_service
+    name: velora-ai
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: velora-db
+          property: connectionString
+      - key: TEXT_API_BASE_URL
+        value: https://api.promto.ai/v1
+      - key: TEXT_MODEL
+        value: google/gemini-3.8-flash
+      - key: IMAGE_API_BASE_URL
+        value: https://api.promto.ai/v1
+      - key: IMAGE_MODEL
+        value: qwen/qwen-image-3-pro
+      - key: VIDEO_SUBMIT_URL
+        value: https://api.promto.ai/v1/videos
+      - key: VIDEO_STATUS_URL
+        value: https://api.promto.ai/v1/videos/{id}
+      - key: VIDEO_MODEL
+        value: minimax/hailuo-3
+      - key: NODE_VERSION
+        value: "22.18.0"
+      - key: TEXT_API_KEY
+        sync: false
+      - key: IMAGE_API_KEY
+        sync: false
+      - key: VIDEO_API_KEY
+        sync: false
+
+databases:
+  - name: velora-db
+    plan: free
+    region: frankfurt
+    databaseName: velora
+    user: velora
