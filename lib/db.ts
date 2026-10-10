@@ -46,14 +46,49 @@ export function db(): Pool | Queryable {
 		throw new ConfigurationError(
 			"DATABASE_URL is not configured yet. Account and saved history require PostgreSQL.",
 		);
-	if (!pool || !(pool instanceof Pool))
-		pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
+	if (!pool || !(pool instanceof Pool)) {
+		const connectionString = process.env.DATABASE_URL;
+		// Render Postgres (external hostnames) requires TLS. Inside Render's own
+		// network plain TCP works too, but external URLs are the common case —
+		// enable TLS automatically so managed DATABASE_URL values just work.
+		const needsSsl = /render\.com|[?&]sslmode=require|[?&]ssl=true/i.test(
+			connectionString,
+		);
+		pool = new Pool({
+			connectionString,
+			max: 5,
+			...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+		});
+		// Fire-and-forget for sync callers; dbAsync() awaits it properly.
+		void ensureSchema(pool as Pool).catch(() => {});
+	}
 	return pool as Pool;
+}
+
+let schemaReady: Promise<void> | undefined;
+async function ensureSchema(p: Pool): Promise<void> {
+	if (!schemaReady) {
+		schemaReady = (async () => {
+			for (const statement of SCHEMA.split(";\n").filter((s) => s.trim())) {
+				await p.query(statement);
+			}
+		})().catch((e) => {
+			schemaReady = undefined;
+			throw e;
+		});
+	}
+	return schemaReady;
 }
 
 export async function dbAsync(): Promise<Pool | Queryable> {
 	// Test-only fallback: in-process PostgreSQL-compatible database (no persistence).
-	if (process.env.DATABASE_URL) return db() as Pool;
+	if (process.env.DATABASE_URL) {
+		const p = db() as Pool;
+		// CREATE TABLE IF NOT EXISTS — safe to run on every cold start, so a
+		// fresh managed database self-initializes without a manual db:setup run.
+		await ensureSchema(p);
+		return p;
+	}
 	if (process.env.VELORA_TEST_DB === "memory") return memoryDb();
 	throw new ConfigurationError(
 		"DATABASE_URL is not configured yet. Account and saved history require PostgreSQL.",

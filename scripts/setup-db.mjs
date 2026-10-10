@@ -3,7 +3,13 @@ if (!process.env.DATABASE_URL) {
 	console.error("DATABASE_URL is required");
 	process.exit(1);
 }
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const needsSsl = /render\.com|[?&]sslmode=require|[?&]ssl=true/i.test(
+	process.env.DATABASE_URL,
+);
+const pool = new pg.Pool({
+	connectionString: process.env.DATABASE_URL,
+	...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+});
 try {
 	await pool.query(`CREATE TABLE IF NOT EXISTS users (id uuid PRIMARY KEY, email text NOT NULL UNIQUE, password_hash text NOT NULL, tokens int NOT NULL DEFAULT 500, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS sessions (id_hash text PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at timestamptz NOT NULL);
