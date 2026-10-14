@@ -3,11 +3,12 @@ import "./globals.css";
 import "./landing.css";
 import "./studio.css";
 import "./editorial.css";
+import "./reference.css";
 
 export const metadata: Metadata = {
-	title: "Velora — AI Video & Image Generation Platform with Human Refinement",
+	title: "Velora AI — Automated AI Video & Image Generation",
 	description:
-		"Transform your ideas into high-impact videos and visuals with AI generation and human-assisted refinement. Pay only for what you create with transparent token-based pricing.",
+		"Automated AI video and image generation by Velora AI. Prepaid EUR tokens, no monthly subscription.",
 };
 
 export default function RootLayout({

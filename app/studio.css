@@ -353,3 +353,56 @@
 	border-color: #f54900;
 	color: #ffe4a6;
 }
+
+/* Dialogs are overlays, never a third flex column. */
+.shell .mobile-menu-button,.shell .mobile-close{display:none}
+.shell .overlay-mobile{display:none}
+.shell .modal-backdrop{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(7,4,2,.78);backdrop-filter:blur(6px);overflow-y:auto;overscroll-behavior:contain}
+.shell .studio-dialog{flex:none;max-height:calc(100dvh - 48px);overflow-y:auto;overscroll-behavior:contain;min-width:0}
+.shell .studio-dialog input{font-size:16px;min-height:48px}
+.shell .studio-dialog button[aria-label="Close modal"]{width:44px;height:44px;display:grid;place-items:center;top:10px;right:10px}
+.shell .composer-settings{flex-wrap:wrap;min-width:0}
+.shell .composer-settings select{appearance:none;background:#24160c;color:#ffe4a6;min-height:44px;padding:10px 30px 10px 12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23ffe4a6' stroke-width='2'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.shell :focus-visible{outline:2px solid #ffe4a6;outline-offset:3px}
+.shell .run-result-card{overflow-wrap:anywhere}
+@media(max-width:767px){
+ .shell{min-height:100dvh;width:100%;display:block}
+ .shell .sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);height:100dvh;min-height:0;transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility .2s;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom));z-index:70;overflow-y:auto}
+ .shell .sidebar.sidebar-open{transform:translateX(0);visibility:visible}
+ .shell .mobile-menu-button,.shell .mobile-close{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;background:none;border:0}
+ .shell .overlay-mobile{display:block;position:fixed;inset:0;background:#0009;border:0;z-index:60}
+ .shell .main-area{width:100%;min-width:0}
+ .shell .topbar{height:auto;min-height:68px;padding:8px 12px;gap:8px;position:sticky;top:0;z-index:30;padding-top:max(8px,env(safe-area-inset-top))}
+ .shell .studio-breadcrumb{gap:8px;min-width:0;flex:1}
+ .shell .studio-breadcrumb>a,.shell .studio-breadcrumb>span:not(.font-bold){display:none}
+ .shell .studio-breadcrumb>.font-bold{font-size:13px;line-height:1.3;min-width:0}
+ .shell .studio-account-actions{gap:8px;flex-shrink:0}
+ .shell .studio-account-actions>button{min-height:44px;font-size:12px}
+ .shell .studio-account-actions>button:first-child{padding:8px 10px;gap:5px}
+ .shell .studio-account-actions>button:first-child>svg:last-child{display:none}
+ .shell .content-scroll{min-height:calc(100dvh - 68px);overflow:visible}
+ .shell .content-wrap{padding:26px 16px max(32px,env(safe-area-inset-bottom));width:100%;max-width:100%}
+ .shell .studio-title-block{margin-bottom:24px}
+ .shell .studio-title-block>div{flex-wrap:wrap;font-size:10px;letter-spacing:.08em;gap:6px}
+ .shell .studio-headline{font-size:clamp(29px,8vw,40px);line-height:1.12;margin:12px 0 14px;overflow-wrap:break-word}
+ .shell .studio-subtitle{font-size:14px;line-height:1.6}
+ .shell .composer-box{padding:16px;border-radius:16px;margin-bottom:18px}
+ .shell .composer-textarea{font-size:16px;min-height:150px;resize:vertical}
+ .shell .composer-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:16px}
+ .shell .composer-settings{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+ .shell .composer-settings>label{min-height:44px;padding:10px 12px;flex:1 0 100%;justify-content:center}
+ .shell .composer-settings>select{font-size:14px;min-width:0;flex:1 1 120px;max-width:100%}
+ .shell .composer-actions{width:100%;gap:10px;justify-content:space-between;flex-wrap:wrap}
+ .shell .run-btn{min-height:48px;justify-content:center;flex:1;padding:12px 18px;font-size:14px}
+ .shell .starter-chips{gap:8px}
+ .shell .starter-chip{min-height:44px;padding:10px 14px;max-width:100%;text-align:left}
+ .shell .run-result-card{padding:16px}
+ .shell .run-result-card img,.shell .run-result-card video{max-width:100%;height:auto}
+ .shell .modal-backdrop{padding:16px;align-items:center}
+ .shell .studio-dialog{padding:26px 20px;max-height:calc(100dvh - 32px);width:100%}
+ .shell .studio-dialog h3{padding-right:18px;font-size:24px;line-height:1.2}
+ .shell .studio-dialog p{line-height:1.6}
+ .shell .studio-dialog form button{min-height:48px}
+ .shell .studio-dialog .mt-6 button{min-height:44px;padding:8px}
+}
+@media(prefers-reduced-motion:reduce){.shell .sidebar{transition:none}}

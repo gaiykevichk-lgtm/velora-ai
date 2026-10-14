@@ -1,409 +1,60 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { VeloraLogo } from "./logo";
-
-export type SitePage =
-	| "about"
-	| "guide"
-	| "faq"
-	| "availability"
-	| "privacy"
-	| "terms"
-	| "pricing"
-	| "services";
-
-export const pages: Record<
-	SitePage,
-	{
-		eyebrow: string;
-		title: string;
-		lead: string;
-		blocks: { title: string; body: string }[];
-		note: string;
-		cta: string;
-	}
-> = {
-	about: {
-		eyebrow: "ABOUT VELORA",
-		title: "AI Video & Image Generation Platform with Human Refinement",
-		lead: "velora combines AI automation, creative talent, and secure infrastructure to deliver professional video and image generation at scale.",
-		blocks: [
-			{
-				title: "From Idea to Video Instantly",
-				body: "Describe your concept in plain words, and our engine transforms it into polished visuals. No complex editing suites or multi-week production pipelines.",
-			},
-			{
-				title: "Integrated Human-Assisted Refinement",
-				body: "Unlike fully automated black-box tools, velora pairs high-speed neural network generations with human-in-the-loop polish for brand-consistent deliverables.",
-			},
-			{
-				title: "Enterprise Security & Infrastructure",
-				body: "All transactions and assets are handled via regulated payment partners and enterprise GPU clusters, giving creator teams auditability and compliance.",
-			},
-		],
-		note: "Start creating without subscriptions. Only pay for the tokens you use.",
-		cta: "Launch Studio",
-	},
-	guide: {
-		eyebrow: "FIELD GUIDE",
-		title: "How Generation Works on Velora",
-		lead: "Three core creative surfaces powered by state-of-the-art models and simple token deductions.",
-		blocks: [
-			{
-				title: "1. Smart Prompt Control (Text Studio)",
-				body: "Powered by Gemini 3.8 Flash. Craft story treatments, script outlines, prompt directions, and brand copy. Costs 5 tokens per run.",
-			},
-			{
-				title: "2. Visual Styling & Composition (Image Studio)",
-				body: "Powered by Qwen Image 3 Pro. Generate photorealistic or stylized keyframes from text or reference images. Costs 25 tokens per image.",
-			},
-			{
-				title: "3. Rapid Motion Rendering (Video Studio)",
-				body: "Powered by Hailuo 3 (MiniMax). Produce high-fidelity 2K video clips up to 10 seconds with physics-consistent camera motion. Costs 100 tokens per clip.",
-			},
-		],
-		note: "Every prompt can be starter-assisted or written freely.",
-		cta: "Open the Studio",
-	},
-	faq: {
-		eyebrow: "FAQ & HELP CENTER",
-		title: "Quick Answers to Common Questions",
-		lead: "Clear rules on token billing, usage rights, and account features.",
-		blocks: [
-			{
-				title: "How does the token-based pricing work?",
-				body: "velora uses a pay-as-you-create token system. You purchase a token package or start with free signup credits. Tokens are deducted only when you generate text, images, or video.",
-			},
-			{
-				title: "Do I need a monthly subscription?",
-				body: "No. There are no recurring monthly charges or subscription lock-ins. Top up your token balance whenever you need to create.",
-			},
-			{
-				title: "Do tokens expire?",
-				body: "Tokens remain valid for 12 months from the date of credit. Unused tokens roll over as long as the account remains active.",
-			},
-			{
-				title: "What are the token costs per generation?",
-				body: "Text chat & scriptwriting: 5 tokens. Image generation & refinement: 25 tokens. 2K Video generation: 100 tokens.",
-			},
-		],
-		note: "Have more questions? Our support team is available at contact@oria.com.im",
-		cta: "Try Studio Now",
-	},
-	pricing: {
-		eyebrow: "PRICING OVERVIEW",
-		title: "Pay Only for What You Create",
-		lead: "No recurring subscriptions. Top up in fiat, get tokens, and use them whenever inspiration strikes.",
-		blocks: [
-			{
-				title: "Starter Package — $10 (1,000 Tokens)",
-				body: "Best for quick experiments and creative tests. Enough for 200 text queries, 40 images, or 10 high-resolution video renders.",
-			},
-			{
-				title: "Creator Package — $20 (2,500 Tokens)",
-				body: "Our most popular package for active content creators. Enables dozens of campaign variations, thumbnails, and short reels.",
-			},
-			{
-				title: "Pro Studio — $50 (7,000 Tokens)",
-				body: "Engineered for marketing teams and agencies delivering client visuals and narrative video campaigns on tight deadlines.",
-			},
-			{
-				title: "Scale Agency — $100 (15,000 Tokens)",
-				body: "Maximum value per token for heavy video workflows, multi-scene storyboarding, and enterprise content pipelines.",
-			},
-		],
-		note: "Every new verified account receives 500 complimentary welcome tokens to test all three studios.",
-		cta: "Top Up in Studio",
-	},
-	services: {
-		eyebrow: "OUR SERVICES",
-		title: "High-Volume Visual & Motion Services",
-		lead: "Full-spectrum AI creation tools designed for modern creators, e-commerce brands, and marketing agencies.",
-		blocks: [
-			{
-				title: "AI Video Generation",
-				body: "Create broadcast-grade 2K videos in minutes for ads, social media, presentations, and product showcases without filming crews.",
-			},
-			{
-				title: "Multi-Modal Visual Assets",
-				body: "Produce lifestyle photography, hero banners, and 3D-styled illustrations aligned with your brand guidelines.",
-			},
-			{
-				title: "Custom Creative Workflows",
-				body: "API endpoints and dedicated rendering capacity for high-volume automated asset generation.",
-			},
-		],
-		note: "Need a managed custom production? Contact our solutions team.",
-		cta: "Start with AI Studio",
-	},
-	availability: {
-		eyebrow: "SYSTEM AVAILABILITY",
-		title: "Operational Status & Integrations",
-		lead: "Real-time overview of active neural engines, databases, and generation pipelines.",
-		blocks: [
-			{
-				title: "Active Text Engine",
-				body: "Google Gemini 3.8 Flash via Promto API Gateway. Status: Online & operational.",
-			},
-			{
-				title: "Active Image Engine",
-				body: "Qwen Image 3 Pro via Promto Image API. Status: Online & operational.",
-			},
-			{
-				title: "Active Video Engine",
-				body: "MiniMax Hailuo 3 async video generation pipeline with authenticated media proxy. Status: Online & operational.",
-			},
-		],
-		note: "All generations operate through secure sandbox microservices.",
-		cta: "Enter Studio",
-	},
-	privacy: {
-		eyebrow: "DATA & PRIVACY",
-		title: "Privacy Policy",
-		lead: "This Privacy Policy explains how ORIA collects, processes, and protects the personal information of individuals who access or use our AI-powered video and image generation platform.",
-		blocks: [
-			{
-				title: "01. General Provisions & Legal Entity",
-				body: "ORIA (Company number: 108 261 926, Registered Address: 47 rue Vivienne, 75002 Paris, France) is the data controller responsible for processing personal data collected through this platform. The Company ensures all data is processed in accordance with the EU General Data Protection Regulation (Regulation (EU) 2016/679 - EU GDPR) and applicable national data protection legislation. For inquiries, contact us at contact@oria.com.im or by phone at +34637558778 (Support hours: 10:00 AM – 6:00 PM CET).",
-			},
-			{
-				title: "02. Data We Collect",
-				body: "We collect information necessary to operate the platform and provide AI generation services, including your name, email address, phone number, and account credentials. Technical data such as IP address, browser type, device information, and activity logs are collected automatically. Payment transactions are processed exclusively by licensed third-party payment service providers complying with financial regulations; we do not store full payment card numbers.",
-			},
-			{
-				title: "03. How We Use Your Information",
-				body: "We use your data to operate and improve our platform, manage user accounts, deliver AI video and image generations, process transactions, provide customer support, and fulfill statutory legal obligations. ORIA acts as the Data Controller for user account, billing, and communication data.",
-			},
-			{
-				title: "04. User Content & AI Training Guarantee",
-				body: "Content created, uploaded, or generated by users is processed solely to deliver the requested AI generation. We do not use user-generated content, creative prompts, or personal data to train, retrain, or improve public AI models. For content uploaded into prompts, ORIA acts strictly as a Data Processor operating under user instructions.",
-			},
-			{
-				title: "05. Cookies & Tracking Technologies",
-				body: "We use strictly necessary cookies to ensure security, authentication, and core functionality. Optional performance, analytics, and functional cookies are used only with your consent and can be adjusted anytime via browser or platform settings.",
-			},
-			{
-				title: "06. Legal Basis for Processing",
-				body: "We process personal data under lawful bases recognized by the EU GDPR: Performance of Contract (account management and service delivery), Compliance with Legal Obligations (tax, accounting, and anti-fraud duties), Legitimate Interests (platform security and stability), and Consent (where explicitly granted).",
-			},
-			{
-				title: "07. International Data Transfers",
-				body: "Where service providers (such as cloud GPU clusters or identity verification partners) operate outside the European Economic Area (EEA), we ensure adequate protection through European Commission Standard Contractual Clauses (SCCs) and equivalent recognized safeguards.",
-			},
-			{
-				title: "08. Data Security & Storage Period",
-				body: "All transmissions are encrypted with modern cryptographic protocols, and access is strictly restricted. We retain account and transactional records for up to 6 years in accordance with applicable statutory and tax laws, after which data is securely deleted or anonymized.",
-			},
-			{
-				title: "09. Your Privacy Rights",
-				body: "Under the EU GDPR, you have the right to access, rectify, or erase your personal data ('Right to be Forgotten'), restrict or object to processing, data portability, and withdrawal of consent. To exercise your rights, email contact@oria.com.im. You also have the right to lodge a complaint with your supervisory authority (such as CNIL in France).",
-			},
-			{
-				title: "10. Protection of Minors",
-				body: "Our platform is exclusively intended for users aged 18 and older. We do not knowingly collect or maintain personal data from minors. Any accounts found to belong to minors will be promptly terminated and associated data deleted.",
-			},
-		],
-		note: "For privacy questions, reach our compliance team at contact@oria.com.im or call +34637558778 (10:00 AM – 6:00 PM CET).",
-		cta: "Open Studio",
-	},
-	terms: {
-		eyebrow: "TERMS OF SERVICE",
-		title: "Platform Rules & Token Policies",
-		lead: "Standard platform terms governing account usage, token redemption, and creative outputs.",
-		blocks: [
-			{
-				title: "Token Usage & Expiration",
-				body: "Tokens represent prepaid digital credits for computing power. Tokens are valid for 12 months from issuance.",
-			},
-			{
-				title: "Intellectual Property Rights",
-				body: "You retain full commercial and personal rights to prompts and media generated through your authenticated account, subject to provider guidelines.",
-			},
-			{
-				title: "Acceptable Use Policy",
-				body: "Users must not generate unlawful, defamatory, or harmful content. Violations result in immediate account termination.",
-			},
-		],
-		note: "By creating an account, you agree to these platform guidelines.",
-		cta: "Agree & Enter Studio",
-	},
+import { ContactForm, CookiePreferences } from "./public-controls";
+import { TOKEN_PACKAGES } from "@/lib/commerce";
+export const navigation = [["Home","/"],["Services","/services"],["Pricing","/pricing"],["About Us","/about"],["Contacts","/contacts"],["FAQ","/faq"]];
+export const serviceCategories = [
+ ["AI Video Generation","Describe your idea, choose the available settings, and generate video automatically.","Video workflow implemented; release validation pending."],
+ ["AI Story Generation","Develop structured narratives and storylines from a text prompt.","Text workflow available; dedicated story tools not implemented."],
+ ["AI Music Generation","Music generation for your creative projects.","Not available yet."],
+ ["AI Voice & Narration","AI-generated voice and narration.","Not available yet."],
+ ["AI Video Editing & Enhancement","AI processing and enhancement of existing footage.","Not available yet."],
+ ["AI Script & Content Generation","Generate scripts and content from your instructions.","Text workflow available; release validation pending."],
+];
+export const faq = [
+ ["How does Velora AI token-based pricing work?","Purchase prepaid tokens and use them within the platform. Tokens are deducted for generation. The cost must be shown before you start. Online purchases are not connected yet."],
+ ["Do I need a subscription?","No. There is no monthly subscription or recurring plan."],
+ ["Do tokens expire?","The agreed purchase model provides 12 months from purchase, subject to mandatory consumer rights. Purchase expiry tracking is pending implementation before commercial release."],
+ ["Can I get a refund for unused tokens?","Mandatory French and EU consumer rights apply. The operational refund process and any additional commercial refund policy must be confirmed before purchases open."],
+ ["Are tokens transferable between accounts?","No. Tokens are for use inside Velora AI only. They cannot be transferred, sold, exchanged for money or withdrawn. Statutory refunds are not excluded."],
+];
+const terms = [
+ ["1. Operator and scope","Velora AI at veloraai.pro is operated by ORIA SASU, France. These release-draft terms describe automated AI generation, not commissioned production, manual editing or creative review. Company registration details and the final contact/legal notices require verification before commercial release."],
+ ["2. Accounts and security","Provide accurate account information and keep your password confidential. The intended release flow requires email verification before generation and purchases. Email verification is not implemented in this local version."],
+ ["3. Automated services and limitations","You select prompts and available settings. AI output may contain inaccuracies, artefacts and third-party rights issues. Check output before using it. No guarantee of unique, error-free or legally protected output is made."],
+ ["4. Prepaid tokens","The agreed packages are €20 for 2,000 tokens and €100 for 10,000 tokens, without monthly subscription. Tokens are platform usage units, not a transferable payment instrument. They cannot be transferred, exchanged for money or withdrawn. Purchased tokens are intended to be valid for 12 months, subject to mandatory law. Purchase expiry tracking is not yet implemented."],
+ ["5. Operation pricing","Generation costs must be displayed before confirmation. The existing local operation rates are not verified against the reference platform and must not be treated as an approved release tariff. Prices and configuration will be confirmed before commercial release."],
+ ["6. Payment and delivery","Online token purchases are currently unavailable. Payment methods, checkout disclosures, applicable taxes, receipt delivery and secure provider callbacks must be confirmed and connected before sales. No payment-network affiliation is claimed."],
+ ["7. Withdrawal, refunds and conformity","Nothing excludes mandatory French or EU consumer rights, including applicable withdrawal rights and statutory remedies for non-conforming digital content or services. Immediate performance or loss of a withdrawal right requires the conditions and express consents required by applicable law; account creation or token credit alone is not treated as automatic waiver. Operational refunds and the commercial policy remain to be confirmed."],
+ ["8. Lawful use and intellectual property","Submit only materials you may lawfully use. Do not use the platform for unlawful, infringing or harmful activity or to bypass safeguards. You retain existing rights in your inputs. Rights in generated output depend on applicable law and provider terms; exclusive ownership or unlimited commercial rights are not guaranteed."],
+ ["9. Data and third parties","Account, prompt and generation data are processed to provide the platform. See the Privacy Policy. Actual providers, retention schedules and transfer safeguards must be confirmed for the release."],
+ ["10. Suspension and liability","Access may be restricted where necessary for security, lawful operation or serious misuse. Any restriction and liability provision remains subject to mandatory law and consumer remedies. No blanket exclusion of statutory rights applies."],
+ ["11. Governing law and complaints","French law applies, without depriving consumers of mandatory protections in their country of habitual residence where applicable. Contact contact@oria.com.im for enquiries. A verified consumer mediation route and final legal notices must be provided before commercial launch."],
+];
+const privacy = [
+ ["1. Controller","ORIA SASU, France, operates Velora AI at veloraai.pro. This is a release-draft privacy notice. Verified legal identity, address and data-protection contact details are required before commercial release. Existing support contact: contact@oria.com.im."],
+ ["2. Data processed","The application stores account email, a password hash, session records, workspaces, prompts, generation status/results and token transaction records. Uploaded reference images and prompts may be sent to the configured AI processing services. Never submit information you do not have a lawful right to process."],
+ ["3. Purposes and legal bases","Processing needed to create and manage accounts and deliver requested generations is based on contract where applicable. Proportionate security processing may rely on legitimate interests. Legal recordkeeping relies on legal obligations. Optional tracking and marketing require consent where applicable, independently of acceptance of this notice."],
+ ["4. Recipients and AI providers","The existing code includes text, image and video provider adapters and PostgreSQL storage. The final list of legal entities acting as hosting, AI and payment processors, their contracts, locations and actual configurations must be verified before release. No unsupported assurance about third-party training or data retention is made."],
+ ["5. International transfers","Any transfer outside the EEA requires a lawful GDPR transfer mechanism, such as an applicable adequacy decision or appropriate contractual safeguards. Actual destinations and safeguards require confirmation; this draft does not certify that they are already in place."],
+ ["6. Cookies","An essential session cookie enables authenticated use. The cookie-preferences control stores a choice locally. No optional analytics or marketing scripts are added in this migration. Optional categories must remain off unless valid consent is obtained before activation."],
+ ["7. Retention and security","Retention must be limited to operational and legal needs. A verified per-category schedule, deletion process and processor retention terms are pending. Session expiration does not by itself delete accounts or prompts. Passwords are hashed and session cookies are HttpOnly; these measures do not constitute a guarantee of absolute security."],
+ ["8. Your rights","Under GDPR, applicable rights include access, rectification, erasure, restriction, portability, objection and withdrawal of consent. Requests should normally be addressed within one month, subject to lawful extensions. You may lodge a complaint with CNIL or another competent supervisory authority. Contact the operator to request exercise of your rights."],
+ ["9. Changes and commercial launch","This draft must be completed using verified operational facts before launch. Updates do not replace a lawful basis for processing or consent where required. Payment processors are not described as connected while checkout is unavailable."],
+];
+export type SitePage = "about"|"services"|"pricing"|"contacts"|"faq"|"terms-and-conditions"|"privacy-policy";
+type Page = {title:string;lead:string;blocks:string[][]};
+export const pages:Record<SitePage,Page>={
+ about:{title:"About Velora AI",lead:"An automated AI creation platform operated by ORIA SASU, France.",blocks:[["From idea to output","Describe your idea, adjust available settings and receive an automatically generated result in your account."],["A self-serve workflow","No manual creative production or human refinement is offered. Only actually implemented generation tools are identified as available."],["Prepaid usage","The agreed commercial model is EUR prepaid tokens with no monthly subscription. Commercial launch depends on verified checkout, account security and pricing."]]},
+ services:{title:"AI creation services",lead:"Explore the reference service categories. Availability is stated explicitly; a category is not a promise of a working feature.",blocks:serviceCategories},
+ pricing:{title:"Unlock AI video creation",lead:"Prepaid tokens. No monthly subscription. Choose a package, top up your account and use tokens to create.",blocks:[["Usage model","Tokens are consumed according to the selected operation and settings. Exact operation prices are pending reference verification; existing local rates have not been approved for release."],["Token validity","Purchased tokens are intended to be valid for 12 months from purchase, subject to mandatory law. The expiry mechanism must be implemented before purchases open."],["Platform-only tokens","Tokens cannot be transferred, traded, exchanged for money or withdrawn. Mandatory refund rights remain unaffected."]]},
+ contacts:{title:"Contact us",lead:"Questions about Velora AI, your account or the agreed prepaid token model? Contact ORIA SASU.",blocks:[["E-mail","contact@oria.com.im"],["Company","ORIA SASU, France. Full verified registration and contact details are pending before release."]]},
+ faq:{title:"Quick answers",lead:"Account, generation and prepaid token questions.",blocks:faq},
+ "terms-and-conditions":{title:"Terms and Conditions",lead:"Release draft — pending operational verification and legal review. Not a final commercial launch document.",blocks:terms},
+ "privacy-policy":{title:"Privacy Policy",lead:"Release draft — GDPR and French/EU framework, with unresolved operational facts explicitly marked.",blocks:privacy},
 };
-
-export function SiteHeader() {
-	return (
-		<header className="site-header">
-			<Link href="/" aria-label="Velora Home">
-				<VeloraLogo size={36} />
-			</Link>
-			<nav className="nav-links">
-				<Link href="/services">Services</Link>
-				<Link href="/pricing">Pricing</Link>
-				<Link href="/about">About us</Link>
-				<Link href="/faq">FAQ</Link>
-				<Link href="/guide">Field Guide</Link>
-			</nav>
-			<div className="flex items-center gap-3">
-				<Link href="/studio" className="btn-secondary">
-					Studio
-				</Link>
-				<Link href="/studio?auth=open" className="header-action-btn">
-					Get Started <ArrowRight size={14} />
-				</Link>
-			</div>
-		</header>
-	);
-}
-
-export function SiteFooter() {
-	return (
-		<footer className="bg-[#120a05] border-t border-[#3a2a1a] text-[#b8ac90] py-16 px-6">
-			<div className="max-w-[1380px] mx-auto grid grid-cols-1 md:grid-cols-12 gap-12">
-				<div className="md:col-span-5 flex flex-col gap-4">
-					<VeloraLogo size={34} />
-					<p className="text-sm leading-relaxed text-[#8a7e6f] max-w-sm">
-						AI video & image generation platform with integrated human-assisted
-						refinement. Pay only for what you create with transparent
-						token-based pricing.
-					</p>
-					<div className="flex items-center gap-3 mt-4 text-xs font-semibold text-[#ffe4a6]">
-						<span className="w-2 h-2 rounded-full bg-[#00a447]" /> All Neural
-						Engines Operational
-					</div>
-				</div>
-
-				<div className="md:col-span-2 flex flex-col gap-3 text-sm">
-					<h3 className="text-xs font-extrabold uppercase tracking-widest text-[#ffe4a6] mb-2">
-						Platform
-					</h3>
-					<Link href="/services" className="hover:text-white transition-colors">
-						Services
-					</Link>
-					<Link href="/pricing" className="hover:text-white transition-colors">
-						Pricing
-					</Link>
-					<Link href="/studio" className="hover:text-white transition-colors">
-						Studio Workspace
-					</Link>
-					<Link href="/guide" className="hover:text-white transition-colors">
-						Field Guide
-					</Link>
-				</div>
-
-				<div className="md:col-span-2 flex flex-col gap-3 text-sm">
-					<h3 className="text-xs font-extrabold uppercase tracking-widest text-[#ffe4a6] mb-2">
-						Company
-					</h3>
-					<Link href="/about" className="hover:text-white transition-colors">
-						About Us
-					</Link>
-					<Link href="/faq" className="hover:text-white transition-colors">
-						FAQ
-					</Link>
-					<Link
-						href="/availability"
-						className="hover:text-white transition-colors"
-					>
-						System Status
-					</Link>
-				</div>
-
-				<div className="md:col-span-3 flex flex-col gap-3 text-sm">
-					<h3 className="text-xs font-extrabold uppercase tracking-widest text-[#ffe4a6] mb-2">
-						Legal & Security
-					</h3>
-					<Link href="/terms" className="hover:text-white transition-colors">
-						Terms and Conditions
-					</Link>
-					<Link href="/privacy" className="hover:text-white transition-colors">
-						Privacy Policy
-					</Link>
-					<div className="text-xs text-[#8a7e6f] mt-3 leading-relaxed flex flex-col gap-1.5">
-						<p className="font-semibold text-[#b8ac90]">
-							ORIA · Reg. 108 261 926
-						</p>
-						<p>47 rue Vivienne, 75002 Paris, France</p>
-						<p>
-							E-mail:{" "}
-							<a
-								href="mailto:contact@oria.com.im"
-								className="text-[#ffe4a6] hover:underline"
-							>
-								contact@oria.com.im
-							</a>
-						</p>
-						<p>
-							Phone:{" "}
-							<a
-								href="tel:+34637558778"
-								className="text-[#ffe4a6] hover:underline"
-							>
-								+34637558778
-							</a>
-						</p>
-						<p className="text-[11px] text-[#706456]">
-							Support: 10:00 AM – 6:00 PM CET
-						</p>
-					</div>
-				</div>
-			</div>
-
-			<div className="max-w-[1380px] mx-auto mt-12 pt-6 border-t border-[#2a1c10] flex flex-col sm:flex-row items-center justify-between text-xs text-[#8a7e6f] gap-4">
-				<p>© 2026 Velora. All rights reserved.</p>
-				<p className="flex items-center gap-2">
-					<span>Visa</span> · <span>Mastercard</span> · <span>3D Secure</span>
-				</p>
-			</div>
-		</footer>
-	);
-}
-
-export function ContentPage({ page }: { page: SitePage }) {
-	const data = pages[page];
-	return (
-		<div className="landing">
-			<div className="announcement-bar">
-				<span className="pulse-dot" /> High-Resolution 2K Video & Image
-				Generation is live <ArrowUpRight size={14} />
-			</div>
-			<SiteHeader />
-			<main className="max-w-[1100px] mx-auto px-6 py-20">
-				<div className="text-xs font-extrabold uppercase tracking-widest text-[#f54900] mb-4">
-					{data.eyebrow}
-				</div>
-				<h1 className="text-4xl md:text-6xl font-black tracking-tight text-white mb-6 leading-tight">
-					{data.title}
-				</h1>
-				<p className="text-lg md:text-xl text-[#b8ac90] leading-relaxed mb-16 max-w-3xl">
-					{data.lead}
-				</p>
-
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
-					{data.blocks.map((b, i) => (
-						<div
-							key={i}
-							className="bg-[#1f140b] border border-[#3a2a1a] rounded-2xl p-8 hover:border-[#f54900] transition-colors"
-						>
-							<h2 className="text-xl font-bold text-[#ffe4a6] mb-3">
-								{b.title}
-							</h2>
-							<p className="text-sm text-[#b8ac90] leading-relaxed">{b.body}</p>
-						</div>
-					))}
-				</div>
-
-				<div className="bg-[#24160c] border border-[#3a2a1a] rounded-2xl p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
-					<div>
-						<div className="text-xs uppercase font-extrabold tracking-wider text-[#ffe4a6] mb-1">
-							Note
-						</div>
-						<div className="text-sm text-[#b8ac90]">{data.note}</div>
-					</div>
-					<Link href="/studio" className="header-action-btn whitespace-nowrap">
-						{data.cta} <ArrowRight size={14} />
-					</Link>
-				</div>
-			</main>
-			<SiteFooter />
-		</div>
-	);
-}
+export function SiteHeader(){return <header className="v-header"><Link href="/" aria-label="Velora AI Home"><VeloraLogo size={36}/></Link><nav aria-label="Main navigation">{navigation.map(([name,path])=><Link key={path} href={path}>{name}</Link>)}</nav><Link className="v-outline" href="/studio?mode=video&auth=open">Log in ↗</Link></header>;}
+export function SiteFooter(){return <footer className="v-footer"><div className="v-footer-grid"><div><VeloraLogo/><p>Automated AI video & image generation.<br/>Prepaid tokens. No monthly subscription.</p><a href="https://veloraai.pro">veloraai.pro</a></div><div><h3>Platform</h3>{navigation.map(([name,path])=><Link key={path} href={path}>{name}</Link>)}</div><div><h3>Legal & Compliance</h3><Link href="/terms-and-conditions">Terms and Conditions</Link><Link href="/privacy-policy">Privacy Policy</Link><h3>Payments & Security</h3><p>Online payments are not connected yet. Available methods will be disclosed before checkout opens.</p></div><div><h3>Contacts</h3><a href="mailto:contact@oria.com.im">contact@oria.com.im</a><p>ORIA SASU · France</p><p>Verified company registration details will be published before commercial release.</p></div></div><div className="v-footer-bottom"><span>© {new Date().getFullYear()} Velora AI. All rights reserved.</span><CookiePreferences/></div></footer>;}
+export function FaqSection(){return <section className="v-section" id="faq"><span className="v-eyebrow">FAQ</span><h2>Quick answers</h2><div className="v-faq">{faq.map(([q,a])=><details key={q}><summary>{q}<span>+</span></summary><p>{a}</p></details>)}</div></section>;}
+export function PricingPackages(){return <div className="v-packages">{Object.entries(TOKEN_PACKAGES).map(([id,p])=><article className="v-card" key={id}><span className="v-eyebrow">{p.label}</span><h2>€{p.priceEur}</h2><h3>{p.tokens.toLocaleString("en-US")} tokens</h3><p>One-time purchase · no subscription</p><Link className="v-button" href="/studio?mode=video&topup=open">View token package ↗</Link></article>)}<p className="v-small">Online purchases are unavailable until payment processing, statutory disclosures and token expiry are implemented. These are agreed packages, not an active checkout.</p></div>;}
+export function ContentPage({page}:{page:SitePage}){const d=pages[page];return <div className="v-site"><SiteHeader/><main><section className="v-section v-page-heading"><span className="v-eyebrow">Home / {d.title}</span><h1>{d.title}</h1><p>{d.lead}</p></section>{page==="pricing"&&<section className="v-section"><PricingPackages/></section>}{page==="faq"?<FaqSection/>:<section className="v-section v-content-list">{d.blocks.map(([title,body,status])=><article className="v-card" key={title}><h2>{title}</h2><p>{body}</p>{status&&<p className="v-status">{status}</p>}</article>)}</section>}{["contacts","pricing"].includes(page)&&<ContactForm/>}</main><SiteFooter/></div>;}

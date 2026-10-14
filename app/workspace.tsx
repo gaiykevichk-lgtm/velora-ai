@@ -15,6 +15,7 @@ import {
 	Plus,
 	X,
 } from "lucide-react";
+import { TOKEN_PACKAGES } from "@/lib/commerce";
 import { presets } from "@/lib/presets";
 import { VeloraLogo } from "./logo";
 
@@ -42,21 +43,21 @@ const modes: {
 		key: "text",
 		title: "Chat & Script",
 		cost: 5,
-		subtitle: "Smart prompt control & narrative creation (5 tokens)",
+		subtitle: "Prompt & script generation (legacy rate: 5 tokens)",
 		icon: MessageCircle,
 	},
 	{
 		key: "image",
 		title: "Image Studio",
 		cost: 25,
-		subtitle: "Photorealistic & artistic generation (25 tokens)",
+		subtitle: "AI image generation (legacy rate: 25 tokens)",
 		icon: ImageIcon,
 	},
 	{
 		key: "video",
-		title: "2K Video Studio",
+		title: "Video Studio",
 		cost: 100,
-		subtitle: "High-resolution AI motion generation (100 tokens)",
+		subtitle: "Automated AI video generation (legacy rate: 100 tokens)",
 		icon: Clapperboard,
 	},
 ];
@@ -75,28 +76,53 @@ export function Workspace() {
 	const searchParams = useSearchParams();
 	const requestedMode = searchParams.get("mode");
 	const [mode, setMode] = useState<Mode>(
-		requestedMode === "image" || requestedMode === "video"
+		requestedMode === "text" ||
+			requestedMode === "image" ||
+			requestedMode === "video"
 			? requestedMode
-			: "text",
+			: "video",
 	);
 	const [account, setAccount] = useState<Account | null>(null);
 	const [tokens, setTokens] = useState<number>(0);
 	const [spaces, setSpaces] = useState<Space[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [runs, setRuns] = useState<Run[]>([]);
-	const [prompt, setPrompt] = useState("");
+	const [prompt, setPrompt] = useState(
+		searchParams.get("prompt")?.slice(0, 8000) ?? "",
+	);
 	const [reference, setReference] = useState<string | undefined>();
 	const [aspectRatio, setAspectRatio] = useState("16:9");
 	const [duration, setDuration] = useState(6);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [authOpen, setAuthOpen] = useState(false);
-	const [topupOpen, setTopupOpen] = useState(false);
+	const [topupOpen, setTopupOpen] = useState(
+		searchParams.get("topup") === "open",
+	);
 	const [authMode, setAuthMode] = useState<"register" | "login">("register");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [topupSuccess, setTopupSuccess] = useState("");
+
+	// Drawers and dialogs must not scroll the background page.
+	useEffect(() => {
+		if (!menuOpen && !authOpen && !topupOpen) return;
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		const close = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setMenuOpen(false);
+				setAuthOpen(false);
+				setTopupOpen(false);
+			}
+		};
+		window.addEventListener("keydown", close);
+		return () => {
+			document.body.style.overflow = previous;
+			window.removeEventListener("keydown", close);
+		};
+	}, [menuOpen, authOpen, topupOpen]);
 
 	const loadSpaces = useCallback(async () => {
 		try {
@@ -240,7 +266,7 @@ export function Workspace() {
 		return data.workspace.id;
 	}
 
-	async function topup(packageId: "starter" | "creator" | "pro" | "scale") {
+	async function topup(packageId: keyof typeof TOKEN_PACKAGES) {
 		if (!account) {
 			setAuthOpen(true);
 			return;
@@ -351,7 +377,10 @@ export function Workspace() {
 	return (
 		<main className="shell">
 			{/* Sidebar */}
-			<aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
+			<aside
+				id="studio-navigation"
+				className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}
+			>
 				<div className="side-top flex items-center justify-between">
 					<Link href="/" aria-label="Velora Home">
 						<VeloraLogo size={32} />
@@ -370,6 +399,7 @@ export function Workspace() {
 					{modes.map((item) => (
 						<button
 							key={item.key}
+							aria-pressed={mode === item.key}
 							className={`nav-item ${mode === item.key ? "selected" : ""}`}
 							onClick={() => chooseMode(item.key)}
 						>
@@ -392,14 +422,14 @@ export function Workspace() {
 						<Coins size={14} className="text-[#ffe4a6]" />
 					</div>
 					<div className="token-count">
-						{account ? tokens.toLocaleString() : "500 Free"}
+						{account ? tokens.toLocaleString() : "0"}
 						<span className="text-xs text-[#8a7e6f] font-normal">tokens</span>
 					</div>
 					<button
 						className="token-topup-btn"
 						onClick={() => (account ? setTopupOpen(true) : setAuthOpen(true))}
 					>
-						<Plus size={13} /> {account ? "Top Up Tokens" : "Claim 500 Tokens"}
+						<Plus size={13} /> {account ? "Top Up Tokens" : "Create account"}
 					</button>
 				</div>
 
@@ -473,7 +503,7 @@ export function Workspace() {
 									G
 								</span>
 								<span className="text-xs font-semibold">
-									Guest (500 free tokens)
+									Guest · sign in to create
 								</span>
 							</div>
 							<ArrowUpRight size={14} />
@@ -493,9 +523,11 @@ export function Workspace() {
 			{/* Main Workspace Area */}
 			<section className="main-area">
 				<header className="topbar">
-					<div className="flex items-center gap-4 text-xs">
+					<div className="studio-breadcrumb flex items-center gap-4 text-xs">
 						<button
-							className="md:hidden text-[#ffe4a6]"
+							className="mobile-menu-button text-[#ffe4a6]"
+							aria-expanded={menuOpen}
+							aria-controls="studio-navigation"
 							aria-label="Open menu"
 							onClick={() => setMenuOpen(true)}
 						>
@@ -511,7 +543,7 @@ export function Workspace() {
 						</span>
 					</div>
 
-					<div className="flex items-center gap-4">
+					<div className="studio-account-actions flex items-center gap-4">
 						<button
 							onClick={() => (account ? setTopupOpen(true) : setAuthOpen(true))}
 							className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#24160c] border border-[#3a2a1a] text-xs font-semibold text-[#ffe4a6] hover:border-[#f54900] transition-colors"
@@ -580,7 +612,7 @@ export function Workspace() {
 								value={prompt}
 								onChange={(e) => setPrompt(e.target.value)}
 								onKeyDown={(e) => {
-									if (e.key === "Enter" && !e.shiftKey) {
+									if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
 										e.preventDefault();
 										void generate(e);
 									}
@@ -602,7 +634,7 @@ export function Workspace() {
 							)}
 
 							<div className="composer-toolbar">
-								<div className="flex items-center gap-3">
+								<div className="composer-settings flex items-center gap-3">
 									<label className="flex items-center gap-1.5 text-xs text-[#b8ac90] hover:text-[#ffe4a6] cursor-pointer bg-[#24160c] px-3 py-1.5 rounded-lg border border-[#3a2a1a]">
 										<Paperclip size={13} />
 										<span>Reference</span>
@@ -617,6 +649,7 @@ export function Workspace() {
 									{mode !== "text" && (
 										<select
 											className="bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-1.5 outline-none"
+											aria-label="Aspect ratio"
 											value={aspectRatio}
 											onChange={(e) => setAspectRatio(e.target.value)}
 										>
@@ -629,6 +662,7 @@ export function Workspace() {
 									{mode === "video" && (
 										<select
 											className="bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-1.5 outline-none"
+											aria-label="Video duration"
 											value={duration}
 											onChange={(e) => setDuration(Number(e.target.value))}
 										>
@@ -638,7 +672,7 @@ export function Workspace() {
 									)}
 								</div>
 
-								<div className="flex items-center gap-3">
+								<div className="composer-actions flex items-center gap-3">
 									<span className="token-cost-badge">
 										<Coins size={12} className="text-[#f54900]" />
 										<span>Cost: {current.cost} tokens</span>
@@ -661,6 +695,11 @@ export function Workspace() {
 							</div>
 						</form>
 
+						<p className="text-xs text-[#b8ac90] p-4">
+							Local preview: displayed operation rates are legacy rates, not a
+							verified Vidorya tariff. Email verification and commercial
+							checkout are pending integration.
+						</p>
 						{/* Prompt starters */}
 						<div className="mb-10">
 							<div className="text-xs font-bold uppercase tracking-wider text-[#8a7e6f] mb-3">
@@ -768,8 +807,22 @@ export function Workspace() {
 
 			{/* Token Top-up Modal */}
 			{topupOpen && (
-				<div className="modal-backdrop">
-					<div className="bg-[#1f140b] border border-[#3a2a1a] rounded-2xl max-w-lg w-full p-8 relative shadow-2xl">
+				<div
+					className="modal-backdrop"
+					onClick={(e) => {
+						if (e.target === e.currentTarget) {
+							setAuthOpen(false);
+							setTopupOpen(false);
+						}
+					}}
+				>
+					<div
+						role="dialog"
+						aria-modal="true"
+						aria-label="Token packages"
+						tabIndex={-1}
+						className="studio-dialog bg-[#1f140b] border border-[#3a2a1a] rounded-2xl max-w-lg w-full p-8 relative shadow-2xl"
+					>
 						<button
 							className="absolute top-5 right-5 text-[#8a7e6f] hover:text-white"
 							onClick={() => setTopupOpen(false)}
@@ -803,98 +856,60 @@ export function Workspace() {
 
 						<p className="text-sm text-[#b8ac90] mb-6 leading-relaxed">
 							Tokens are valid for 12 months with no subscription lock-ins.
-							Select an instant package:
+							Agreed packages (checkout not yet available):
 						</p>
 
 						<div className="grid grid-cols-2 gap-3 mb-6">
-							<button
-								type="button"
-								disabled={busy}
-								onClick={() => topup("starter")}
-								className="bg-[#120a05] border border-[#3a2a1a] hover:border-[#f54900] p-4 rounded-xl text-left transition-colors"
-							>
-								<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-									Starter
-								</div>
-								<div className="text-2xl font-black text-white mt-1">$10</div>
-								<div className="text-xs text-[#f3913e] font-bold mt-1">
-									1,000 tokens
-								</div>
-								<div className="text-[10px] text-[#8a7e6f] mt-1">
-									40 images or 10 videos
-								</div>
-							</button>
-
-							<button
-								type="button"
-								disabled={busy}
-								onClick={() => topup("creator")}
-								className="bg-[#24160c] border border-[#f54900] p-4 rounded-xl text-left shadow-lg relative"
-							>
-								<div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-[#f54900] text-white">
-									Popular
-								</div>
-								<div className="text-xs text-[#ffe4a6] font-bold uppercase">
-									Creator
-								</div>
-								<div className="text-2xl font-black text-white mt-1">$20</div>
-								<div className="text-xs text-[#f3913e] font-bold mt-1">
-									2,500 tokens
-								</div>
-								<div className="text-[10px] text-[#8a7e6f] mt-1">
-									100 images or 25 videos
-								</div>
-							</button>
-
-							<button
-								type="button"
-								disabled={busy}
-								onClick={() => topup("pro")}
-								className="bg-[#120a05] border border-[#3a2a1a] hover:border-[#f54900] p-4 rounded-xl text-left transition-colors"
-							>
-								<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-									Pro Studio
-								</div>
-								<div className="text-2xl font-black text-white mt-1">$50</div>
-								<div className="text-xs text-[#f3913e] font-bold mt-1">
-									7,000 tokens
-								</div>
-								<div className="text-[10px] text-[#8a7e6f] mt-1">
-									280 images or 70 videos
-								</div>
-							</button>
-
-							<button
-								type="button"
-								disabled={busy}
-								onClick={() => topup("scale")}
-								className="bg-[#120a05] border border-[#3a2a1a] hover:border-[#f54900] p-4 rounded-xl text-left transition-colors"
-							>
-								<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-									Scale
-								</div>
-								<div className="text-2xl font-black text-white mt-1">$100</div>
-								<div className="text-xs text-[#f3913e] font-bold mt-1">
-									15,000 tokens
-								</div>
-								<div className="text-[10px] text-[#8a7e6f] mt-1">
-									Best token rate
-								</div>
-							</button>
+							{Object.entries(TOKEN_PACKAGES).map(([id, p]) => (
+								<button
+									key={id}
+									type="button"
+									disabled
+									className="bg-[#120a05] border border-[#3a2a1a] p-4 rounded-xl text-left"
+								>
+									<div className="text-xs text-[#8a7e6f]">{p.label}</div>
+									<div className="text-2xl font-black text-white mt-1">
+										€{p.priceEur}
+									</div>
+									<div className="text-xs text-[#f3913e] mt-1">
+										{p.tokens.toLocaleString("en-US")} tokens
+									</div>
+									<div className="text-xs mt-2">Purchase unavailable</div>
+								</button>
+							))}
 						</div>
-
-						<div className="text-xs text-[#8a7e6f] text-center">
-							Test environment simulation · Tokens are credited instantly to
-							your account.
-						</div>
+						<p className="text-xs text-[#b8ac90]">
+							Online payments are not connected yet. No payment will be taken.
+							Before purchases open, expiry tracking and mandatory consumer
+							disclosures must be implemented. Tokens cannot be transferred or
+							withdrawn.
+						</p>
+						<p className="text-xs text-[#b8ac90] mt-3">
+							<Link href="/terms-and-conditions">Terms and Conditions</Link> ·{" "}
+							<Link href="/privacy-policy">Privacy Policy</Link>
+						</p>
 					</div>
 				</div>
 			)}
 
 			{/* Authentication Modal */}
 			{authOpen && (
-				<div className="modal-backdrop">
-					<div className="bg-[#1f140b] border border-[#3a2a1a] rounded-2xl max-w-md w-full p-8 relative shadow-2xl">
+				<div
+					className="modal-backdrop"
+					onClick={(e) => {
+						if (e.target === e.currentTarget) {
+							setAuthOpen(false);
+							setTopupOpen(false);
+						}
+					}}
+				>
+					<div
+						role="dialog"
+						aria-modal="true"
+						aria-label="Account access"
+						tabIndex={-1}
+						className="studio-dialog bg-[#1f140b] border border-[#3a2a1a] rounded-2xl max-w-md w-full p-8 relative shadow-2xl"
+					>
 						<button
 							className="absolute top-5 right-5 text-[#8a7e6f] hover:text-white"
 							onClick={() => setAuthOpen(false)}
@@ -910,7 +925,7 @@ export function Workspace() {
 						</h3>
 						<p className="text-xs text-[#b8ac90] mb-6">
 							{authMode === "register"
-								? "Get 500 free tokens immediately to test text, image, and 2K video models."
+								? "Create an account to access automated AI generation. No free signup tokens are issued."
 								: "Sign in to access your token balance, workspaces, and history."}
 						</p>
 
@@ -927,10 +942,13 @@ export function Workspace() {
 								</label>
 								<input
 									type="email"
+									autoComplete="email"
+									aria-label="Email address"
+									autoFocus
 									required
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
-									placeholder="creator@velora.ai"
+									placeholder="creator@example.com"
 									className="w-full bg-[#120a05] border border-[#3a2a1a] rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-[#f54900]"
 								/>
 							</div>
@@ -941,6 +959,12 @@ export function Workspace() {
 								</label>
 								<input
 									type="password"
+									autoComplete={
+										authMode === "register"
+											? "new-password"
+											: "current-password"
+									}
+									aria-label="Password"
 									required
 									minLength={10}
 									value={password}
@@ -958,7 +982,7 @@ export function Workspace() {
 								{busy
 									? "Please wait..."
 									: authMode === "register"
-										? "Create Account & Get 500 Tokens"
+										? "Create Account"
 										: "Sign In"}
 							</button>
 						</form>
@@ -987,7 +1011,7 @@ export function Workspace() {
 											setError("");
 										}}
 									>
-										Register (500 free tokens)
+										Register
 									</button>
 								</>
 							)}

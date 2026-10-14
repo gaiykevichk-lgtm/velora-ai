@@ -28,10 +28,7 @@ export function VeloraLogo({ size = 32 }: { size?: number }) {
 				<circle cx="20" cy="18" r="3.5" fill="#ffe4a6" />
 			</svg>
 			<span className="text-xl tracking-tight text-white font-black">
-				velora<span className="text-[#f54900]">.</span>
-				<span className="text-xs text-[#b8ac90] font-normal tracking-wider">
-					ai
-				</span>
+				Velora <span className="text-[#f3913e]">AI</span>
 			</span>
 		</div>
 	);

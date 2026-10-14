@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 			id = randomUUID();
 			try {
 				await (await dbAsync()).query(
-					"INSERT INTO users (id,email,password_hash,tokens) VALUES ($1,$2,$3,500)",
+					"INSERT INTO users (id,email,password_hash,tokens) VALUES ($1,$2,$3,0)",
 					[id, email, hashPassword(password)],
 				);
 			} catch (e) {

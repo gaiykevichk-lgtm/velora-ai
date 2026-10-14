@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ContentPage, pages, type SitePage } from "../site-content";
 
 export function generateStaticParams() {
@@ -21,6 +21,8 @@ export default async function EditorialPage({
 	params: Promise<{ slug: string }>;
 }) {
 	const { slug } = await params;
+	const aliases: Record<string, string> = {terms: "terms-and-conditions", privacy: "privacy-policy", "about-us": "about", guide: "faq", availability: "services"};
+	if (aliases[slug]) redirect(`/${aliases[slug]}`);
 	if (!(slug in pages)) notFound();
 	return <ContentPage page={slug as SitePage} />;
 }

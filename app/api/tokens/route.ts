@@ -3,19 +3,7 @@ import { user } from "@/lib/auth";
 import { dbAsync } from "@/lib/db";
 import { failure, unauthorized } from "@/lib/api";
 
-const PACKAGES: Record<
-	string,
-	{ priceUsd: number; tokens: number; label: string }
-> = {
-	starter: { priceUsd: 10, tokens: 1000, label: "Starter (1,000 tokens)" },
-	creator: { priceUsd: 20, tokens: 2500, label: "Creator (2,500 tokens)" },
-	pro: { priceUsd: 50, tokens: 7000, label: "Pro Studio (7,000 tokens)" },
-	scale: {
-		priceUsd: 100,
-		tokens: 15000,
-		label: "Scale Agency (15,000 tokens)",
-	},
-};
+import { TOKEN_PACKAGES } from "@/lib/commerce";
 
 export async function GET() {
 	try {
@@ -33,7 +21,11 @@ export async function GET() {
 		return NextResponse.json({
 			tokens: balanceRes.rows[0]?.tokens ?? 0,
 			rates: { text: 5, image: 25, video: 100 },
-			packages: PACKAGES,
+			packages: TOKEN_PACKAGES,
+            currency: "EUR",
+            validityMonths: 12,
+            operationRatesVerified: false,
+            expiryTrackingEnabled: false,
 			topupEnabled: false,
 			transactions: txsRes.rows,
 		});
@@ -52,7 +44,7 @@ export async function POST() {
 			{
 				code: "TOPUP_DISABLED",
 				error:
-					"Online top-ups are currently unavailable. Token credits must be assigned manually by an administrator.",
+					"Online token purchases are not connected yet. No payment has been taken and no tokens have been credited.",
 			},
 			{ status: 403 },
 		);
