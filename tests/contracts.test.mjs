@@ -15,6 +15,7 @@ test("database contains ownership and expiration constraints", () => {
 	const migration = readFileSync("scripts/setup-db.mjs", "utf8");
 	assert.match(migration, /user_id uuid NOT NULL REFERENCES users/);
 	assert.match(migration, /expires_at timestamptz/);
+ assert.match(migration, /token_orders/);
 });
 test("self-service token top-ups fail closed without balance mutations", () => {
  const route = readFileSync("app/api/tokens/route.ts", "utf8");
@@ -24,4 +25,15 @@ test("self-service token top-ups fail closed without balance mutations", () => {
  assert.match(post, /status: 403/);
  assert.doesNotMatch(post, /\.query\(|UPDATE|INSERT|req\.json|packageId/);
  assert.match(route, /topupEnabled: false/);
+});
+
+test("invoice orders exist with administrator-only crediting", () => {
+ const route = readFileSync("app/api/orders/route.ts", "utf8");
+ assert.match(route, /token_orders/);
+ assert.match(route, /adminUser/);
+ assert.match(route, /INSERT INTO token_orders/);
+ assert.match(route, /UPDATE users SET tokens=tokens/);
+ assert.match(route, /INSERT INTO token_transactions/);
+ assert.match(route, /already been credited/);
+ assert.match(readFileSync("lib/admin.ts", "utf8"), /ADMIN_EMAILS/);
 });

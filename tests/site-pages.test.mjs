@@ -6,6 +6,7 @@ test('public pages use the agreed navigation and canonical legal routes',()=>{
  const s=source('app/site-content.tsx');
  for(const route of ['/services','/pricing','/about','/contacts','/faq','/terms-and-conditions','/privacy-policy']) assert.ok(s.includes(route));
  assert.doesNotMatch(s,/Field Guide|human-assisted|Visa|Mastercard|Priority GPU|Dedicated API/);
+ assert.match(s,/Omnix21/);assert.match(s,/107 643 348 R.C.S. Paris/);assert.match(s,/contact@omnix-21.com/);assert.match(s,/\+33 6 87 35 58 25/);assert.match(s,/TokenEstimator/);assert.doesNotMatch(s,/ORIA|oria\.com\.im|34637558778|108 261 926/);
 });
 test('home sections follow reference order without additional model marketing',()=>{
  const s=source('app/page.tsx');const order=['v-hero','ExampleGallery compact','id="why"','id="features"','id="services"','<ContactForm','v-feedback','<FaqSection'];

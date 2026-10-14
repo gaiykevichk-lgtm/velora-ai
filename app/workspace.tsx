@@ -16,11 +16,13 @@ import {
 	X,
 } from "lucide-react";
 import { TOKEN_PACKAGES } from "@/lib/commerce";
+import { COMPANY, TOKENS_PER_EUR } from "@/lib/company";
 import { presets } from "@/lib/presets";
 import { VeloraLogo } from "./logo";
 
 type Mode = "text" | "image" | "video";
 type Account = { id: string; email: string; tokens?: number };
+type TokenOrder = { id: string; eur_amount: number; tokens: number; status: string; admin_note?: string; created_at: string; decided_at?: string | null; email?: string; user_id?: string };
 type Space = { id: string; title: string; mode: Mode };
 type Run = {
 	id: string;
@@ -104,6 +106,12 @@ export function Workspace() {
 	const [password, setPassword] = useState("");
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [topupSuccess, setTopupSuccess] = useState("");
+	const [customEur, setCustomEur] = useState(20);
+	const [orders, setOrders] = useState<TokenOrder[]>([]);
+	const [isAdmin, setIsAdmin] = useState(false);
+	const [orderMsg, setOrderMsg] = useState("");
+	const [adminNote, setAdminNote] = useState("");
+	const [adminBusyId, setAdminBusyId] = useState("");
 
 	// Drawers and dialogs must not scroll the background page.
 	useEffect(() => {
@@ -141,6 +149,59 @@ export function Workspace() {
 			/* Ignore if not logged in */
 		}
 	}, []);
+
+	const refreshOrders = useCallback(async () => {
+		try {
+			const data = await request<{ orders: TokenOrder[]; isAdmin: boolean }>("/api/orders");
+			setOrders(data.orders);
+			setIsAdmin(data.isAdmin);
+		} catch {
+			/* Guest mode or unavailable */
+		}
+	}, []);
+
+	useEffect(() => {
+		if (topupOpen && account) void refreshOrders();
+	}, [topupOpen, account, refreshOrders]);
+
+	async function placeOrder(eurAmount: number) {
+		if (!account) {
+			setAuthOpen(true);
+			return;
+		}
+		setBusy(true);
+		setError("");
+		setOrderMsg("");
+		try {
+			const res = await request<{ order: TokenOrder }>("/api/orders", {
+				method: "POST",
+				body: JSON.stringify({ eurAmount }),
+			});
+			setOrderMsg(`Order placed: €${res.order.eur_amount} = ${res.order.tokens.toLocaleString("en-US")} tokens. Status: pending invoice.`);
+			void refreshOrders();
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	async function decideOrder(id: string, action: "invoiced" | "credited" | "cancelled") {
+		setAdminBusyId(id);
+		setError("");
+		try {
+			await request("/api/orders", {
+				method: "PATCH",
+				body: JSON.stringify({ id, action, adminNote }),
+			});
+			void refreshOrders();
+			void refreshTokens();
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setAdminBusyId("");
+		}
+	}
 
 	useEffect(() => {
 		request<{ user: Account | null }>("/api/auth")
@@ -856,16 +917,22 @@ export function Workspace() {
 
 						<p className="text-sm text-[#b8ac90] mb-6 leading-relaxed">
 							Tokens are valid for 12 months with no subscription lock-ins.
-							Agreed packages (checkout not yet available):
+							Agreed packages and a custom amount — payment by invoice:
 						</p>
 
+						{orderMsg && (
+							<div className="mb-4 p-3 rounded-lg bg-[#0f2e1a] border border-[#1f8a3b] text-sm text-[#33ec64] font-semibold">
+								{orderMsg}
+							</div>
+						)}
 						<div className="grid grid-cols-2 gap-3 mb-6">
 							{Object.entries(TOKEN_PACKAGES).map(([id, p]) => (
 								<button
 									key={id}
 									type="button"
-									disabled
-									className="bg-[#120a05] border border-[#3a2a1a] p-4 rounded-xl text-left"
+									disabled={busy}
+									onClick={() => void placeOrder(p.priceEur)}
+									className="bg-[#120a05] border border-[#3a2a1a] p-4 rounded-xl text-left hover:border-[#f54900] transition-colors disabled:opacity-60"
 								>
 									<div className="text-xs text-[#8a7e6f]">{p.label}</div>
 									<div className="text-2xl font-black text-white mt-1">
@@ -874,15 +941,55 @@ export function Workspace() {
 									<div className="text-xs text-[#f3913e] mt-1">
 										{p.tokens.toLocaleString("en-US")} tokens
 									</div>
-									<div className="text-xs mt-2">Purchase unavailable</div>
+									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">Order by invoice ↗</div>
 								</button>
 							))}
 						</div>
+						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
+							<div className="text-xs text-[#8a7e6f] font-bold uppercase">Custom amount (invoice order)</div>
+							<div className="mt-2 flex items-baseline justify-between gap-3">
+								<span className="text-2xl font-black text-white">€{customEur}</span>
+								<span className="text-sm font-bold text-[#f3913e]">{(customEur * TOKENS_PER_EUR).toLocaleString("en-US")} tokens</span>
+							</div>
+							<label className="mt-3 block text-xs text-[#b8ac90]" htmlFor="studio-token-range">Choose an amount between €1 and €10,000</label>
+							<input id="studio-token-range" type="range" min={1} max={200} step={1} value={Math.min(customEur, 200)} onChange={(e) => setCustomEur(Number(e.target.value))} className="mt-2 w-full" />
+							<div className="mt-3 flex items-center gap-2">
+								<label className="text-xs text-[#8a7e6f]" htmlFor="studio-token-eur">€</label>
+								<input id="studio-token-eur" type="number" min={1} max={10000} step={1} value={customEur} onChange={(e) => setCustomEur(Math.max(1, Math.min(10000, Number(e.target.value) || 1)))} className="w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none" />
+								<button type="button" disabled={busy} onClick={() => void placeOrder(customEur)} className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#f3913e] to-[#f54900] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60">Place invoice order ↗</button>
+							</div>
+							<p className="mt-3 text-xs text-[#8a7e6f]">No online payment is taken here. After you place the order, {COMPANY.name} issues an invoice; tokens are credited by an administrator after payment.</p>
+						</div>
+						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
+							<div className="text-xs text-[#8a7e6f] font-bold uppercase">My invoice orders</div>
+							{orders.length === 0 ? (
+								<p className="mt-2 text-xs text-[#8a7e6f]">No orders yet. Place your first invoice order above.</p>
+							) : (
+								<ul className="mt-3 space-y-2">
+									{orders.filter((o) => isAdmin || !o.email || true).slice(0, isAdmin ? 100 : 50).map((o) => (
+										<li key={o.id} className="rounded-lg border border-[#2a1c10] bg-[#1f140b] p-3 text-xs text-[#d0c6b4]">
+											<div className="flex items-center justify-between gap-2">
+												<span className="font-bold text-white">€{o.eur_amount} = {o.tokens.toLocaleString("en-US")} tokens</span>
+												<span className="rounded-full border border-[#3a2a1a] px-2 py-0.5 text-[10px] font-bold uppercase text-[#ffe4a6]">{o.status}</span>
+											</div>
+											<div className="mt-1 text-[11px] text-[#8a7e6f]">{new Date(o.created_at).toLocaleString()} · {o.id.slice(0, 8)}{o.email && isAdmin ? ` · ${o.email}` : ""}</div>
+											{o.admin_note && <div className="mt-1 text-[11px] text-[#ffe4a6]">Admin: {o.admin_note}</div>}
+											{isAdmin && o.status !== "credited" && o.status !== "cancelled" && (
+												<div className="mt-2 flex flex-wrap items-center gap-2">
+													<input value={adminBusyId === o.id ? "" : adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Admin note (optional)" maxLength={2000} className="min-w-0 flex-1 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none" />
+													<button type="button" disabled={adminBusyId === o.id} onClick={() => void decideOrder(o.id, "invoiced")} className="rounded-full border border-[#3a2a1a] px-3 py-1.5 text-[11px] font-bold text-[#ffe4a6] disabled:opacity-60">Invoiced</button>
+													<button type="button" disabled={adminBusyId === o.id} onClick={() => void decideOrder(o.id, "credited")} className="rounded-full bg-[#0f2e1a] border border-[#1f8a3b] px-3 py-1.5 text-[11px] font-bold text-[#33ec64] disabled:opacity-60">Credit tokens</button>
+													<button type="button" disabled={adminBusyId === o.id} onClick={() => void decideOrder(o.id, "cancelled")} className="rounded-full border border-[#e93e3a] px-3 py-1.5 text-[11px] font-bold text-[#ff9988] disabled:opacity-60">Cancel</button>
+												</div>
+											)}
+										</li>
+									))}
+								</ul>
+							)}
+							{isAdmin && <p className="mt-3 text-[11px] text-[#8a7e6f]">Administrator view: recent orders across all users. Only emails in ADMIN_EMAILS can credit tokens.</p>}
+						</div>
 						<p className="text-xs text-[#b8ac90]">
-							Online payments are not connected yet. No payment will be taken.
-							Before purchases open, expiry tracking and mandatory consumer
-							disclosures must be implemented. Tokens cannot be transferred or
-							withdrawn.
+							Online card payments are not connected. Orders are processed by invoice: place an order, receive an invoice from Omnix21, and tokens are credited by an administrator after payment. Expiry tracking and mandatory consumer disclosures must be completed before commercial launch. Tokens cannot be transferred or withdrawn.
 						</p>
 						<p className="text-xs text-[#b8ac90] mt-3">
 							<Link href="/terms-and-conditions">Terms and Conditions</Link> ·{" "}

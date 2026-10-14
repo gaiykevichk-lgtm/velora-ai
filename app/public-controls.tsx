@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { COMPANY, TOKENS_PER_EUR } from "@/lib/company";
 export function CookiePreferences() {
 	const [open, setOpen] = useState(false);
 	useEffect(() => {
@@ -42,6 +43,61 @@ export function CookiePreferences() {
 		</>
 	);
 }
+export function TokenEstimator() {
+	const [eur, setEur] = useState(20);
+	const tokens = useMemo(() => eur * TOKENS_PER_EUR, [eur]);
+	return (
+		<section
+			className="v-section v-estimator"
+			aria-label="Token cost estimator"
+		>
+			<span className="v-eyebrow">TOKEN ESTIMATOR</span>
+			<h2>
+				Preview your <span>token amount</span>
+			</h2>
+			<p className="v-intro">
+				Select an amount to see how many tokens it corresponds to, then place
+				an invoice order from your account. No online payment is taken here.
+			</p>
+			<div className="v-estimator-card">
+				<div className="v-estimator-values">
+					<div>
+						<div className="v-eyebrow">AMOUNT</div>
+						<div className="v-estimator-amount">€{eur}</div>
+					</div>
+					<div>
+						<div className="v-eyebrow">TOKENS</div>
+						<div className="v-estimator-amount">
+							{tokens.toLocaleString("en-US")}
+						</div>
+					</div>
+				</div>
+				<label htmlFor="token-estimator-range">
+					Choose an amount between €0 and €100
+				</label>
+				<input
+					id="token-estimator-range"
+					type="range"
+					min={0}
+					max={100}
+					step={1}
+					value={eur}
+					onChange={(e) => setEur(Number(e.target.value))}
+				/>
+				<p className="v-small">
+					Rate: {TOKENS_PER_EUR} tokens per €1 — the same conversion as the
+					agreed packages (€20 = 2,000 tokens, €100 = 10,000 tokens). To buy
+					tokens, sign in and place an invoice order: {COMPANY.name} issues the
+					invoice and an administrator credits the tokens after payment. Online
+					card checkout is not connected.
+				</p>
+				<a className="v-button" href="/studio?mode=video&topup=open">
+					Order {tokens.toLocaleString("en-US")} tokens by invoice ↗
+				</a>
+			</div>
+		</section>
+	);
+}
 export function ContactForm() {
 	const [status, setStatus] = useState("");
 	return (
@@ -53,15 +109,15 @@ export function ContactForm() {
 					<br />
 					<span>Project</span>
 				</h2>
-				<p>Questions about the platform? Contact ORIA SASU.</p>
-				<a href="mailto:contact@oria.com.im">contact@oria.com.im ↗</a>
+				<p>Questions about the platform? Contact Omnix21.</p>
+				<a href={`mailto:${COMPANY.email}`}>{COMPANY.email} ↗</a>
 			</div>
 			<form
 				onSubmit={(e) => {
 					e.preventDefault();
 					const data = new FormData(e.currentTarget);
 					const body = `Name: ${data.get("name")}\nPhone: ${data.get("phone")}\nEmail: ${data.get("email")}\n\n${data.get("comment")}`;
-					window.location.href = `mailto:contact@oria.com.im?subject=${encodeURIComponent("Velora AI enquiry")}&body=${encodeURIComponent(body)}`;
+					window.location.href = `mailto:${COMPANY.email}?subject=${encodeURIComponent("Velora AI enquiry")}&body=${encodeURIComponent(body)}`;
 					setStatus(
 						"Your email application has been opened. The message has not been sent by this website.",
 					);

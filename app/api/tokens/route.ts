@@ -27,6 +27,8 @@ export async function GET() {
             operationRatesVerified: false,
             expiryTrackingEnabled: false,
 			topupEnabled: false,
+			purchaseMethod: "invoice",
+			purchaseNote: "Token purchases are processed by invoice. Place an order in Studio; an administrator issues the invoice and credits tokens after payment.",
 			transactions: txsRes.rows,
 		});
 	} catch (e) {
