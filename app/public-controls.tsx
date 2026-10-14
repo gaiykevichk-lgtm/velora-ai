@@ -56,8 +56,8 @@ export function TokenEstimator() {
 				Preview your <span>token amount</span>
 			</h2>
 			<p className="v-intro">
-				Select an amount to see how many tokens it corresponds to, then place
-				an invoice order from your account. No online payment is taken here.
+				Select an amount to see how many tokens it corresponds to, then place an
+				invoice order from your account. No online payment is taken here.
 			</p>
 			<div className="v-estimator-card">
 				<div className="v-estimator-values">
