@@ -12,3 +12,4 @@ node_modules
 
 # Render local tool
 .tools/
+.next-verify
