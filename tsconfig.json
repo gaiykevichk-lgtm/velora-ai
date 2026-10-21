@@ -35,9 +35,10 @@
     ".next-editorial/types/**/*.ts",
     ".next-local/types/**/*.ts",
     ".next-preview/types/**/*.ts",
+    ".next-test2/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-test2/types/**/*.ts"
+    ".next-verify/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

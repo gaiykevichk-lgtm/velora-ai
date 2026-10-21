@@ -10,12 +10,24 @@ export async function GET() {
 	try {
 		const pool = await dbAsync();
 		await pool.query("SELECT 1");
-		const table = await pool.query<{ users: string | null }>(
-			"SELECT to_regclass('public.users') AS users",
-		);
+		let usersTable: string | null = null;
+		try {
+			const table = await pool.query<{ users: string | null }>(
+				"SELECT to_regclass('public.users') AS users",
+			);
+			usersTable = table.rows[0]?.users ?? null;
+		} catch {
+			// pg-mem (local test DB) has no to_regclass — fall back to a probe.
+			try {
+				await pool.query("SELECT 1 FROM users LIMIT 1");
+				usersTable = "users";
+			} catch {
+				usersTable = null;
+			}
+		}
 		return NextResponse.json({
 			db: true,
-			usersTable: table.rows[0]?.users ?? null,
+			usersTable,
 			ms: Date.now() - started,
 		});
 	} catch (error) {
