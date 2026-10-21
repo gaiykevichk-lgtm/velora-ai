@@ -168,6 +168,26 @@ async function smtpSend(opts: {
 	}
 }
 
+export async function sendPlainMail(to: string, subject: string, text: string) {
+	const cfg = verificationConfig();
+	if (!cfg) return { sent: false as const, messageId: "" };
+	try {
+		await smtpSend({
+			host: cfg.host,
+			port: cfg.port,
+			user: cfg.user,
+			pass: cfg.pass,
+			from: process.env.BANK_MAIL_FROM?.trim() || cfg.from,
+			to,
+			subject,
+			text,
+		});
+		return { sent: true as const, messageId: `smtp-${Date.now()}` };
+	} catch (e) {
+		throw new Error(`Mail transport failed: ${(e as Error).message}`);
+	}
+}
+
 export async function sendVerificationEmail(to: string, token: string) {
 	const cfg = verificationConfig();
 	const link = verificationLink(token);
