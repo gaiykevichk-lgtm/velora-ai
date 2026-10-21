@@ -37,3 +37,21 @@ test("invoice orders exist with administrator-only crediting", () => {
  assert.match(route, /already been credited/);
  assert.match(readFileSync("lib/admin.ts", "utf8"), /ADMIN_EMAILS/);
 });
+test("registration creates an unverified account with a confirmation link", () => {
+ const route = readFileSync("app/api/auth/route.ts", "utf8");
+ assert.match(route, /email_verified/);
+ assert.match(route, /email_verifications/);
+ assert.match(route, /EMAIL_NOT_VERIFIED/);
+ assert.match(route, /sendVerificationEmail/);
+ assert.match(readFileSync("app/api/auth/verify/route.ts", "utf8"), /expires_at/);
+ assert.match(readFileSync("lib/verify-email.ts", "utf8"), /SMTP_HOST/);
+ assert.match(readFileSync("lib/db.ts", "utf8"), /email_verifications/);
+ assert.match(readFileSync(".env.example", "utf8"), /SMTP_HOST=/);
+ assert.match(readFileSync("render.yaml", "utf8"), /SMTP_HOST/);
+});
+test("generation requires a verified email", () => {
+ const route = readFileSync("app/api/runs/route.ts", "utf8");
+ const post = route.slice(route.indexOf("export async function POST"));
+ assert.match(post, /email_verified/);
+ assert.match(post, /EMAIL_NOT_VERIFIED/);
+});

@@ -10,6 +10,11 @@ import {
 } from "@/lib/auth";
 import { dbAsync } from "@/lib/db";
 import { failure } from "@/lib/api";
+import {
+	isSmtpConfigured,
+	newVerificationToken,
+	sendVerificationEmail,
+} from "@/lib/verify-email";
 const schema = z.object({
 	email: z
 		.string()
@@ -40,8 +45,11 @@ export async function POST(req: NextRequest) {
 		const found = await (await dbAsync()).query<{
 			id: string;
 			password_hash: string;
-		}>("SELECT id,password_hash FROM users WHERE email=$1", [email]);
+			email_verified: boolean;
+		}>("SELECT id,password_hash,email_verified FROM users WHERE email=$1", [email]);
 		let id: string;
+		let needsVerification = false;
+		let devVerifyLink: string | null = null;
 		if (req.nextUrl.searchParams.get("action") === "register") {
 			if (found.rowCount)
 				return NextResponse.json(
@@ -51,7 +59,7 @@ export async function POST(req: NextRequest) {
 			id = randomUUID();
 			try {
 				await (await dbAsync()).query(
-					"INSERT INTO users (id,email,password_hash,tokens) VALUES ($1,$2,$3,0)",
+					"INSERT INTO users (id,email,password_hash,tokens,email_verified) VALUES ($1,$2,$3,0,false)",
 					[id, email, hashPassword(password)],
 				);
 			} catch (e) {
@@ -62,6 +70,20 @@ export async function POST(req: NextRequest) {
 					);
 				throw e;
 			}
+			needsVerification = true;
+			const { token, tokenHash } = newVerificationToken();
+			try {
+				await (await dbAsync()).query(
+					"INSERT INTO email_verifications (id, user_id, token_hash, expires_at) VALUES ($1,$2,$3,now()+interval '24 hours')",
+					[randomUUID(), id, tokenHash],
+				);
+				const result = await sendVerificationEmail(email, token);
+				if (!result.sent && process.env.NODE_ENV !== "production")
+					devVerifyLink = result.link;
+			} catch {
+				// Account is created; the link can be re-requested via resend.
+				needsVerification = true;
+			}
 		} else {
 			if (
 				!found.rows[0] ||
@@ -71,6 +93,14 @@ export async function POST(req: NextRequest) {
 					{ error: "Invalid email or password." },
 					{ status: 401 },
 				);
+			if (!found.rows[0].email_verified)
+				return NextResponse.json(
+					{
+						error: "Please confirm your email first. Check your inbox for the confirmation link.",
+						code: "EMAIL_NOT_VERIFIED",
+					},
+					{ status: 403 },
+				);
 			id = found.rows[0].id;
 		}
 		await createSession(id);
@@ -78,8 +108,18 @@ export async function POST(req: NextRequest) {
 			id: string;
 			email: string;
 			tokens: number;
-		}>("SELECT id,email,tokens FROM users WHERE id=$1", [id]);
-		return NextResponse.json({ user: updated.rows[0] });
+			email_verified: boolean;
+		}>("SELECT id,email,tokens,email_verified FROM users WHERE id=$1", [id]);
+		return NextResponse.json({
+			user: updated.rows[0],
+			...(needsVerification
+				? {
+						needsVerification: true as const,
+						emailSent: isSmtpConfigured(),
+						...(devVerifyLink ? { devVerifyLink } : {}),
+					}
+				: {}),
+		});
 	} catch (e) {
 		return failure(e);
 	}

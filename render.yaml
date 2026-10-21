@@ -30,6 +30,18 @@ services:
         value: minimax/hailuo-3
       - key: NODE_VERSION
         value: "22.18.0"
+      - key: APP_BASE_URL
+        value: https://velora-ai.onrender.com
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        value: Velora <no-reply@veloraai.pro>
       - key: TEXT_API_KEY
         sync: false
       - key: IMAGE_API_KEY

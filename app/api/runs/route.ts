@@ -58,6 +58,15 @@ export async function POST(req: NextRequest) {
 	try {
 		const account = await user();
 		if (!account) return unauthorized();
+		if (!account.email_verified)
+			return NextResponse.json(
+				{
+					error:
+						"Please confirm your email first. Check your inbox for the confirmation link.",
+					code: "EMAIL_NOT_VERIFIED",
+				},
+				{ status: 403 },
+			);
 		const parsed = schema.safeParse(await req.json());
 		if (!parsed.success)
 			return NextResponse.json(
@@ -148,11 +157,8 @@ export async function POST(req: NextRequest) {
 			throw e;
 		}
 
-		const newBalance = Math.max(0, currentTokens - tokenCost);
-		await pool.query("UPDATE users SET tokens = $1 WHERE id = $2", [
-			newBalance,
-			account.id,
-		]);
+		const deducted = await pool.query("UPDATE users SET tokens=tokens-$1 WHERE id=$2 AND tokens >= $1 RETURNING tokens", [tokenCost, account.id]);
+        if (!deducted.rowCount) return NextResponse.json({error: "Balance changed during generation. Please try again.", code: "INSUFFICIENT_TOKENS"}, {status: 402});
 		const txId = randomUUID();
 		await pool.query(
 			"INSERT INTO token_transactions (id, user_id, amount, reason) VALUES ($1, $2, $3, $4)",

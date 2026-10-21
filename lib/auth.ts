@@ -29,8 +29,9 @@ export async function user() {
 		id: string;
 		email: string;
 		tokens: number;
+		email_verified: boolean;
 	}>(
-		`SELECT u.id,u.email,u.tokens FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=$1 AND s.expires_at>now()`,
+		`SELECT u.id,u.email,u.tokens,u.email_verified FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id_hash=$1 AND s.expires_at>now()`,
 		[hashToken(token)],
 	);
 	return rows[0] ?? null;

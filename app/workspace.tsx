@@ -21,7 +21,7 @@ import { presets } from "@/lib/presets";
 import { VeloraLogo } from "./logo";
 
 type Mode = "text" | "image" | "video";
-type Account = { id: string; email: string; tokens?: number };
+type Account = { id: string; email: string; tokens?: number; email_verified?: boolean };
 type TokenOrder = { id: string; eur_amount: number; tokens: number; status: string; admin_note?: string; created_at: string; decided_at?: string | null; email?: string; user_id?: string };
 type Space = { id: string; title: string; mode: Mode };
 type Run = {
@@ -85,6 +85,8 @@ export function Workspace() {
 			: "video",
 	);
 	const [account, setAccount] = useState<Account | null>(null);
+	const [verifyNotice, setVerifyNotice] = useState("");
+	const [resendBusy, setResendBusy] = useState(false);
 	const [tokens, setTokens] = useState<number>(0);
 	const [spaces, setSpaces] = useState<Space[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
@@ -109,6 +111,9 @@ export function Workspace() {
 	const [customEur, setCustomEur] = useState(20);
 	const [orders, setOrders] = useState<TokenOrder[]>([]);
 	const [isAdmin, setIsAdmin] = useState(false);
+ const [onlineEnabled, setOnlineEnabled] = useState(false);
+ const [paymentOrders, setPaymentOrders] = useState<TokenOrder[]>([]);
+ const [checkoutRequest, setCheckoutRequest] = useState<{packageId: string; requestId: string} | null>(null);
 	const [orderMsg, setOrderMsg] = useState("");
 	const [adminNote, setAdminNote] = useState("");
 	const [adminBusyId, setAdminBusyId] = useState("");
@@ -163,6 +168,40 @@ export function Workspace() {
 	useEffect(() => {
 		if (topupOpen && account) void refreshOrders();
 	}, [topupOpen, account, refreshOrders]);
+
+
+ const refreshPayments = useCallback(async (orderId?: string) => {
+   try {
+     const data = await request<{enabled: boolean; orders: TokenOrder[]}>(`/api/payments${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ""}`);
+     setOnlineEnabled(data.enabled);
+     setPaymentOrders(data.orders);
+     if (orderId) {
+       const order = data.orders.find(o => o.id === orderId);
+       setOrderMsg(order?.status === "credited" ? "Payment confirmed. Tokens credited." : "Payment is not confirmed yet. Use Check payment status to refresh. Do not pay again while confirmation is pending.");
+       void refreshTokens();
+     }
+   } catch (e) { setError((e as Error).message); }
+ }, [refreshTokens]);
+ useEffect(() => {
+   if (topupOpen && account) void refreshPayments(searchParams.get("paymentOrder") || undefined);
+ }, [topupOpen, account, refreshPayments, searchParams]);
+
+ async function checkout(packageId: keyof typeof TOKEN_PACKAGES) {
+   if (!account) { setAuthOpen(true); return; }
+   setBusy(true); setError(""); setOrderMsg("");
+   // Keep UUID across ambiguous timeouts/reloads and switching back to the same package.
+   const key = `velora-checkout:${account.id}:${packageId}`;
+   try {
+     const requestId = sessionStorage.getItem(key) || crypto.randomUUID();
+     sessionStorage.setItem(key, requestId);
+     setCheckoutRequest({packageId, requestId});
+     const result = await request<{checkoutUrl: string; orderId: string}>("/api/payments/checkout", {
+       method: "POST", body: JSON.stringify({packageId, requestId}),
+     });
+     window.location.assign(result.checkoutUrl);
+   } catch (e) { setError((e as Error).message); }
+   finally { setBusy(false); }
+ }
 
 	async function placeOrder(eurAmount: number) {
 		if (!account) {
@@ -225,6 +264,13 @@ export function Workspace() {
 		if (searchParams.get("auth") === "open" && !account) {
 			setAuthOpen(true);
 		}
+		if (searchParams.get("verified") === "1" && !account) {
+			setAuthOpen(true);
+			setAuthMode("login");
+			setVerifyNotice(
+				"Email confirmed. Sign in with your password to continue.",
+			);
+		}
 	}, [searchParams, account]);
 
 	useEffect(() => {
@@ -276,15 +322,55 @@ export function Workspace() {
 		setMenuOpen(false);
 	}
 
+	async function resendVerification(targetEmail?: string) {
+		const target = (targetEmail ?? email).trim();
+		if (!target) return;
+		setResendBusy(true);
+		setError("");
+		try {
+			await request("/api/auth/verify", {
+				method: "POST",
+				body: JSON.stringify({ email: target }),
+			});
+			setVerifyNotice(
+				"Confirmation link sent. Check your inbox (and spam folder). The link is valid for 24 hours.",
+			);
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setResendBusy(false);
+		}
+	}
+
 	async function authenticate(event: React.FormEvent) {
 		event.preventDefault();
 		setBusy(true);
 		setError("");
+		setVerifyNotice("");
 		try {
-			const data = await request<{ user: Account }>(
+			const data = await request<{
+				user: Account;
+				needsVerification?: boolean;
+				emailSent?: boolean;
+				devVerifyLink?: string;
+			}>(
 				`/api/auth?action=${authMode}`,
 				{ method: "POST", body: JSON.stringify({ email, password }) },
 			);
+			if (data.needsVerification) {
+				setVerifyNotice(
+					data.emailSent
+						? "Account created. Check your inbox for the confirmation link (valid 24 hours), then sign in."
+						: "Account created, but the confirmation email could not be sent yet. Use Resend below.",
+				);
+				if (data.devVerifyLink)
+					setVerifyNotice(
+						(prev) => `${prev} Dev link: ${data.devVerifyLink}`,
+					);
+				setAuthMode("login");
+				setPassword("");
+				return;
+			}
 			setAccount(data.user);
 			if (typeof data.user.tokens === "number") {
 				setTokens(data.user.tokens);
@@ -293,9 +379,16 @@ export function Workspace() {
 			}
 			setAuthOpen(false);
 			setPassword("");
+			setVerifyNotice("");
 			await loadSpaces();
 		} catch (e) {
-			setError((e as Error).message);
+			const msg = (e as Error).message;
+			setError(msg);
+			if (/confirm your email/i.test(msg)) {
+				setVerifyNotice(
+					"Your email is not confirmed yet. Check your inbox or resend the link below.",
+				);
+			}
 		} finally {
 			setBusy(false);
 		}
@@ -917,7 +1010,7 @@ export function Workspace() {
 
 						<p className="text-sm text-[#b8ac90] mb-6 leading-relaxed">
 							Tokens are valid for 12 months with no subscription lock-ins.
-							Agreed packages and a custom amount — payment by invoice:
+							Choose a package for secure Infini checkout, or order separately by invoice:
 						</p>
 
 						{orderMsg && (
@@ -929,9 +1022,10 @@ export function Workspace() {
 							{Object.entries(TOKEN_PACKAGES).map(([id, p]) => (
 								<button
 									key={id}
-									type="button"
-									disabled={busy}
-									onClick={() => void placeOrder(p.priceEur)}
+                                    type="button"
+                                    disabled={busy || !onlineEnabled}
+                                    title={onlineEnabled ? "Continue to Infini" : "Online payments are not configured"}
+									onClick={() => void checkout(id as keyof typeof TOKEN_PACKAGES)}
 									className="bg-[#120a05] border border-[#3a2a1a] p-4 rounded-xl text-left hover:border-[#f54900] transition-colors disabled:opacity-60"
 								>
 									<div className="text-xs text-[#8a7e6f]">{p.label}</div>
@@ -941,10 +1035,28 @@ export function Workspace() {
 									<div className="text-xs text-[#f3913e] mt-1">
 										{p.tokens.toLocaleString("en-US")} tokens
 									</div>
-									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">Order by invoice ↗</div>
+									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">{onlineEnabled ? "Pay with Infini ↗" : "Online payment unavailable"}</div>
 								</button>
 							))}
 						</div>
+
+                        {!onlineEnabled && <p className="text-sm text-[#ffe4a6]">Online payments are not enabled. No charge has been made. Invoice orders remain available below.</p>}
+                        <div className="mt-4 text-sm text-[#b8ac90]">
+                          <p>Online payment orders</p>
+                          {paymentOrders.length === 0 && <p className="text-xs">No online orders yet.</p>}
+                          {paymentOrders.map(o => <div key={o.id} className="mt-2 rounded-lg border border-[#3a2a1a] p-3">
+                            €{o.eur_amount} · {o.tokens.toLocaleString("en-US")} tokens · {o.status}
+                            {o.status !== "credited" && <button type="button" disabled={busy || !onlineEnabled} className="block mt-2 underline" onClick={() => void refreshPayments(o.id)}>Check payment status</button>}
+                            {o.status === "credited" && <button type="button" className="block mt-2 underline" onClick={() => {
+                              for (const id of Object.keys(TOKEN_PACKAGES)) {
+                                const key = `velora-checkout:${account?.id}:${id}`;
+                                if (sessionStorage.getItem(key) === o.id) sessionStorage.removeItem(key);
+                              }
+                              setCheckoutRequest(null); setOrderMsg("You can now select a package for a new purchase.");
+                            }}>Start a new purchase</button>}
+                          </div>)}
+                          {checkoutRequest && <p className="text-xs mt-2">Retrying the same package reuses order {checkoutRequest.requestId.slice(0,8)} to avoid duplicate charges.</p>}
+                        </div>
 						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
 							<div className="text-xs text-[#8a7e6f] font-bold uppercase">Custom amount (invoice order)</div>
 							<div className="mt-2 flex items-baseline justify-between gap-3">
@@ -989,7 +1101,7 @@ export function Workspace() {
 							{isAdmin && <p className="mt-3 text-[11px] text-[#8a7e6f]">Administrator view: recent orders across all users. Only emails in ADMIN_EMAILS can credit tokens.</p>}
 						</div>
 						<p className="text-xs text-[#b8ac90]">
-							Online card payments are not connected. Orders are processed by invoice: place an order, receive an invoice from Omnix21, and tokens are credited by an administrator after payment. Expiry tracking and mandatory consumer disclosures must be completed before commercial launch. Tokens cannot be transferred or withdrawn.
+							Infini handles online checkout; available methods depend on merchant approval. Tokens are credited only after server-side payment verification, not on return from checkout. Invoice orders remain separate. Token expiry enforcement, refunds and mandatory consumer disclosures must be completed before commercial launch. Tokens cannot be transferred or withdrawn.
 						</p>
 						<p className="text-xs text-[#b8ac90] mt-3">
 							<Link href="/terms-and-conditions">Terms and Conditions</Link> ·{" "}
@@ -1039,6 +1151,12 @@ export function Workspace() {
 						{error && (
 							<div className="mb-4 p-3 rounded-lg bg-[#2b0f0b] border border-[#e93e3a] text-xs text-[#ff9988]">
 								{error}
+							</div>
+						)}
+
+						{verifyNotice && (
+							<div className="mb-4 p-3 rounded-lg bg-[#0f2e1a] border border-[#1f8a3b] text-xs text-[#7dffa8]">
+								{verifyNotice}
 							</div>
 						)}
 
@@ -1094,34 +1212,48 @@ export function Workspace() {
 							</button>
 						</form>
 
-						<div className="mt-6 text-center text-xs text-[#8a7e6f]">
+						<div className="mt-4 text-center text-xs text-[#8a7e6f]">
+							Didn\u2019t get the confirmation email?{" "}
+							<button
+								type="button"
+								disabled={resendBusy || !email}
+								className="text-[#ffe4a6] font-bold hover:underline disabled:opacity-60"
+								onClick={() => void resendVerification()}
+							>
+								{resendBusy ? "Sending\u2026" : "Resend confirmation link"}
+							</button>
+						</div>
+
+						<div className="mt-4 text-center text-xs text-[#8a7e6f]">
 							{authMode === "register" ? (
 								<>
 									Already have an account?{" "}
 									<button
-										className="text-[#ffe4a6] font-bold hover:underline"
-										onClick={() => {
-											setAuthMode("login");
-											setError("");
-										}}
-									>
-										Sign in
-									</button>
-								</>
-							) : (
-								<>
-									Need an account?{" "}
-									<button
-										className="text-[#ffe4a6] font-bold hover:underline"
-										onClick={() => {
-											setAuthMode("register");
-											setError("");
-										}}
-									>
-										Register
-									</button>
-								</>
-							)}
+											className="text-[#ffe4a6] font-bold hover:underline"
+											onClick={() => {
+												setAuthMode("login");
+												setError("");
+												setVerifyNotice("");
+											}}
+										>
+											Sign in
+										</button>
+									</>
+								) : (
+									<>
+										Need an account?{" "}
+										<button
+											className="text-[#ffe4a6] font-bold hover:underline"
+											onClick={() => {
+												setAuthMode("register");
+												setError("");
+												setVerifyNotice("");
+											}}
+										>
+											Register
+										</button>
+									</>
+								)}
 						</div>
 					</div>
 				</div>

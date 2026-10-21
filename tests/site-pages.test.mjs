@@ -15,7 +15,7 @@ test('home sections follow reference order without additional model marketing',(
 });
 test('packages are EUR prepaid only and registration has no free credits',()=>{
  const s=source('lib/commerce.ts');assert.match(s,/priceEur: 20,[\s\S]*?tokens: 2000/);assert.match(s,/priceEur: 100,[\s\S]*?tokens: 10000/);assert.doesNotMatch(s,/priceUsd/);
- assert.match(source('app/api/auth/route.ts'),/VALUES \(\$1,\$2,\$3,0\)/);
+ assert.match(source('app/api/auth/route.ts'),/VALUES \(\$1,\$2,\$3,0,false\)/);
  assert.doesNotMatch(source('app/workspace.tsx'),/500 free|500 Tokens|\$10|\$20|\$50|\$100|simulation/);
 });
 test('payment and legal gaps are explicitly disclosed, not mocked',()=>{
