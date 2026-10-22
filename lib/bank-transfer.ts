@@ -5,7 +5,7 @@ import { join } from "node:path";
 export class BankConfigError extends Error {}
 
 export const BANK_MIN_EUR = 1;
-export const BANK_MAX_EUR = 2500;
+export const BANK_MAX_EUR = 10000;
 
 export function bankConfig() {
 	const seller = {

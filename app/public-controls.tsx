@@ -73,13 +73,13 @@ export function TokenEstimator() {
 					</div>
 				</div>
 				<label htmlFor="token-estimator-range">
-					Choose an amount between €0 and €100
+					Choose an amount between €1 and €10,000
 				</label>
 				<input
 					id="token-estimator-range"
 					type="range"
-					min={0}
-					max={100}
+					min={1}
+					max={10000}
 					step={1}
 					value={eur}
 					onChange={(e) => setEur(Number(e.target.value))}

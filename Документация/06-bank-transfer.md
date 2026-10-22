@@ -1,7 +1,7 @@
 # Bank transfer (IBAN) — working notes, not legal text
 
 ## Scope in this version
-- Buyer flow: amount €1–€2,500, buyer type person/company, confirm order, receive IBAN instructions.
+- Buyer flow: amount €1–€10,000, buyer type person/company, confirm order, receive IBAN instructions.
 - Admin flow: mark paid, mark reviewing, mark cancelled, mark reported, refund bookkeeping, upload signed contract.
 - Buyer receipt email exists but may be log-only when SMTP is absent; admin sees delivery state.
 - PDF downloads are plain-text PDF documents generated without dependencies; bank files can be attached/uploaded and exported in the dossier.

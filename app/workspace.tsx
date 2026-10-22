@@ -21,46 +21,408 @@ import { presets } from "@/lib/presets";
 import { VeloraLogo } from "./logo";
 
 type Mode = "text" | "image" | "video";
-type Account = { id: string; email: string; tokens?: number; email_verified?: boolean };
-type BankBuyer={fullName:string;legalName:string;regNumber:string;repName:string;vat:string;country:string;address:string};
-function currency(n:number){return `\u20ac${Number(n).toLocaleString("en-US")}`;}
-function BankTermsLine(){const [text,setText]=useState("Tokens have a limited validity period with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:"); useEffect(()=>{(async()=>{try{const r=await fetch("/api/bank-transfer/config"); if(!r.ok) return; const j=await r.json(); setText(`Tokens are valid for ${Number(j.validityMonths)||12} months with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:`);}catch{ setText("Tokens have a limited validity period with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:"); }})();},[]); return <>{text}</>;}
-function CopyInline({text}:{text:string}){const [ok,setOk]=useState(false); return <span className="inline-flex items-center gap-1"><code className="rounded bg-black/30 px-1">{text}</code><button type="button" className="underline" onClick={()=>{void navigator.clipboard?.writeText(text); setOk(true); window.setTimeout(()=>setOk(false),1500);}}>{ok?"Copied":"Copy"}</button></span>;}
-function CopyText({text}:{text:string}){return <button type="button" className="ml-2 underline" onClick={()=>{void navigator.clipboard?.writeText(text);}}>Copy</button>;}
-function BankField({label,value,set}:{label:string;value:string;set:(v:string)=>void}){return <label className="block"><span className="text-[11px] uppercase text-[#8a7e6f] font-bold">{label}</span><input value={value} onChange={(e)=>set(e.target.value)} className="mt-1 w-full bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none" /></label>;}
-function BankOrderDetails({id}:{id:string}){
- const [data,setData]=useState<any|null>(null); const [err,setErr]=useState("");
- useEffect(()=>{(async()=>{try{const d=await request<{order:any}>(`/api/bank-transfer/orders?id=${encodeURIComponent(id)}`); setData(d);}catch(e){setErr((e as Error).message);}})();},[id]);
- if(err) return <p className="mt-2 text-[#e93e3a]">{err}</p>;
- if(!data) return <p className="mt-2">Loading order details…</p>;
- const o=data.order; const s=o.seller ?? {}; const b=o.buyer ?? {};
- return <div className="mt-2 rounded-lg border border-[#3a2a1a] bg-black/30 p-3 text-xs leading-relaxed">
-  <div>Recipient: {s.legalName ?? "—"} · {s.bank ?? ""}{s.country ? `, ${s.country}` : ""}</div>
-  <div className="mt-1">IBAN: <CopyInline text={String(s.iban ?? "")} /></div>
-  <div className="mt-1">BIC: <CopyInline text={String(s.bic ?? "")} /> · Bank: {s.bank ?? "—"}</div>
-  <div className="mt-1">Amount: €{Number(o.eur_amount).toLocaleString("en-US")} · Reference: <CopyInline text={String(o.public_number)} /></div>
-  <div className="mt-1">Buyer: {o.buyer?.kind === "company" ? `${b.legalName ?? ""} (${b.regNumber ?? ""})` : b.fullName ?? ""} · {b.country ?? ""}</div>
-  <div className="mt-1">Status: {o.status} · confirmed {o.confirmed_at ? new Date(o.confirmed_at).toLocaleString() : "—"}</div>
- </div>;
+type Account = {
+	id: string;
+	email: string;
+	tokens?: number;
+	email_verified?: boolean;
+};
+type BankBuyer = {
+	fullName: string;
+	legalName: string;
+	regNumber: string;
+	repName: string;
+	vat: string;
+	country: string;
+	address: string;
+};
+function currency(n: number) {
+	return `\u20ac${Number(n).toLocaleString("en-US")}`;
 }
-function BankDetailsLink({id}:{id:string}){return <div className="mt-2"><BankOrderDetails id={id} /></div>;}
-function BankAdminCard(props:{order:any;busyId:string;pay:any;setPay:(v:any)=>void;refund:any;setRefund:(v:any)=>void;evidenceMsg:string;setEvidenceMsg:(v:string)=>void;call:(action:string,body:any,orderId:string)=>void}){
- const {order,busyId,pay,setPay,refund,setRefund,evidenceMsg,setEvidenceMsg,call}=props;
- const o=order.order; const paid=(order.payments as any[]).reduce((n:number,r:any)=>n+Number(r.amount_cents),0)/100;
- const labels:Record<string,string>={awaiting_payment:"Awaiting payment",confirmed:"Awaiting payment",partial:"Partial payment — manual review",review:"Payment under review",reported:"Payment reported — verify receipt",credited:"Paid — tokens credited",cancelled:"Cancelled",refunded:"Refund processed"};
- async function upload(ev:React.ChangeEvent<HTMLInputElement>){const f=ev.target.files?.[0]; if(!f) return; const fd=new FormData(); fd.append("orderId",o.id); fd.append("file",f); setEvidenceMsg("Uploading..."); try{const r=await fetch("/api/bank-transfer/evidence",{method:"POST",body:fd}); const j=await r.json(); if(!r.ok) throw new Error(j.error||"Upload failed"); setEvidenceMsg("Evidence attached.");}catch(e){setEvidenceMsg((e as Error).message);} ev.target.value="";}
- return <div className="mt-3 rounded-xl border border-[#e93e3a] p-3 text-xs text-[#d0c6b4]">
- <div className="font-bold text-white">Admin transfer card: {o.public_number} · {currency(Number(o.eur_amount))} · {labels[o.status] ?? o.status}</div>
- <div className="mt-1">Paid {currency(paid)} of {currency(Number(o.eur_amount))}; remaining {currency(Math.max(0,Number(o.eur_amount)-paid))} · Mail: {order.mail ? `${order.mail.state}` : "no record"}</div>
- <div className="mt-2">Reference {o.public_number}<CopyText text={o.public_number}/></div>
- <div className="mt-2"><button type="button" disabled={busyId===o.id+"payment"} onClick={()=>void call("payment",{orderId:o.id,senderName:pay.senderName,amount:Number(pay.amount),currency:pay.currency,receivedDate:pay.receivedDate,bankRef:pay.bankRef||null,paymentRef:pay.paymentRef,matchBasis:pay.matchBasis,idempotencyKey:crypto.randomUUID()},o.id)} className="rounded-full border px-3 py-1.5 font-bold">Record receipt</button> <button type="button" disabled={busyId===o.id+"credit"} onClick={()=>void call("credit",{orderId:o.id,note:"manual confirm"},o.id)} className="rounded-full border border-[#1f8a3b] px-3 py-1.5 font-bold">Confirm receipt — credit once</button></div>
- <div className="mt-3">Evidence: {(order.evidence as any[]).map((e:any)=><div key={e.id}>{e.file_name} · <a className="underline" href={`/api/bank-transfer/documents?evidenceId=${e.id}`}>Download</a></div>)}<label className="mt-1 block">Attach PDF/CSV/PNG/JPEG up to 15MB <input type="file" accept=".pdf,.csv,.png,.jpg,.jpeg" onChange={(e)=>void upload(e)} /></label>{evidenceMsg ? <div>{evidenceMsg}</div> : null}<label className="mt-1 block">Attach signed contract (PDF) <input type="file" accept=".pdf" onChange={(e)=>{const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{const b64=String(r.result).split(",")[1]; void call("contract",{orderId:o.id,fileName:f.name,mime:"application/pdf",dataBase64:b64},o.id);}; r.readAsDataURL(f);}} /></label></div>
- <div className="mt-3">Documents: {(order.docs as any[]).map((d:any)=><div key={d.id}>{d.kind} {d.doc_number} v{d.version} <a className="underline" href={`/api/bank-transfer/documents?kind=document&doc=${d.id}`}>PDF</a></div>)}<a className="mt-1 underline inline-block" href={`/api/bank-transfer/admin?action=dossier&orderId=${o.id}`}>Download dossier (ZIP)</a></div>
- <div className="mt-3">Refunds: {(order.refunds as any[]).map((r:any)=><div key={r.id}>{r.status} €{Number(r.amount_cents)/100} {r.bank_ref} {r.reason}</div>)}<div className="grid grid-cols-2 gap-2 mt-1"><BankField label="Refund EUR" value={refund.amount} set={(v)=>setRefund({...refund,amount:v})} /><BankField label="Refund bank ref" value={refund.bankRef} set={(v)=>setRefund({...refund,bankRef:v})} /></div><BankField label="Reason" value={refund.reason} set={(v)=>setRefund({...refund,reason:v})} /><BankField label="Token correction" value={refund.tokenCorrection} set={(v)=>setRefund({...refund,tokenCorrection:v})} /><button type="button" disabled={busyId===o.id+"refund"} className="mt-1 rounded-full border px-3 py-1.5" onClick={()=>void call("refund",{orderId:o.id,amount:Number(refund.amount)||0,status:"executed",reason:refund.reason,bankRef:refund.bankRef,tokenCorrection:Number(refund.tokenCorrection)||0},o.id)}>Record executed refund</button></div>
- <div className="mt-3">History: {(order.history as any[]).map((h:any,i:number)=><div key={i}>{String(h.created_at)} · {h.actor_email} · {h.action}</div>)}</div>
- </div>;
+function BankTermsLine() {
+	const [text, setText] = useState(
+		"Tokens have a limited validity period with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:",
+	);
+	useEffect(() => {
+		(async () => {
+			try {
+				const r = await fetch("/api/bank-transfer/config");
+				if (!r.ok) return;
+				const j = await r.json();
+				setText(
+					`Tokens are valid for ${Number(j.validityMonths) || 12} months with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:`,
+				);
+			} catch {
+				setText(
+					"Tokens have a limited validity period with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:",
+				);
+			}
+		})();
+	}, []);
+	return <>{text}</>;
 }
-type TokenOrder = { id: string; eur_amount: number; tokens: number; status: string; admin_note?: string; created_at: string; decided_at?: string | null; email?: string; user_id?: string };
+function CopyInline({ text }: { text: string }) {
+	const [ok, setOk] = useState(false);
+	return (
+		<span className="inline-flex items-center gap-1">
+			<code className="rounded bg-black/30 px-1">{text}</code>
+			<button
+				type="button"
+				className="underline"
+				onClick={() => {
+					void navigator.clipboard?.writeText(text);
+					setOk(true);
+					window.setTimeout(() => setOk(false), 1500);
+				}}
+			>
+				{ok ? "Copied" : "Copy"}
+			</button>
+		</span>
+	);
+}
+function CopyText({ text }: { text: string }) {
+	return (
+		<button
+			type="button"
+			className="ml-2 underline"
+			onClick={() => {
+				void navigator.clipboard?.writeText(text);
+			}}
+		>
+			Copy
+		</button>
+	);
+}
+function BankField({
+	label,
+	value,
+	set,
+}: {
+	label: string;
+	value: string;
+	set: (v: string) => void;
+}) {
+	return (
+		<label className="block">
+			<span className="text-[11px] uppercase text-[#8a7e6f] font-bold">
+				{label}
+			</span>
+			<input
+				value={value}
+				onChange={(e) => set(e.target.value)}
+				className="mt-1 w-full bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
+			/>
+		</label>
+	);
+}
+function BankOrderDetails({ id }: { id: string }) {
+	const [data, setData] = useState<any | null>(null);
+	const [err, setErr] = useState("");
+	useEffect(() => {
+		(async () => {
+			try {
+				const d = await request<{ order: any }>(
+					`/api/bank-transfer/orders?id=${encodeURIComponent(id)}`,
+				);
+				setData(d);
+			} catch (e) {
+				setErr((e as Error).message);
+			}
+		})();
+	}, [id]);
+	if (err) return <p className="mt-2 text-[#e93e3a]">{err}</p>;
+	if (!data) return <p className="mt-2">Loading order details…</p>;
+	const o = data.order;
+	const s = o.seller ?? {};
+	const b = o.buyer ?? {};
+	return (
+		<div className="mt-2 rounded-lg border border-[#3a2a1a] bg-black/30 p-3 text-xs leading-relaxed">
+			<div>
+				Recipient: {s.legalName ?? "—"} · {s.bank ?? ""}
+				{s.country ? `, ${s.country}` : ""}
+			</div>
+			<div className="mt-1">
+				IBAN: <CopyInline text={String(s.iban ?? "")} />
+			</div>
+			<div className="mt-1">
+				BIC: <CopyInline text={String(s.bic ?? "")} /> · Bank: {s.bank ?? "—"}
+			</div>
+			<div className="mt-1">
+				Amount: €{Number(o.eur_amount).toLocaleString("en-US")} · Reference:{" "}
+				<CopyInline text={String(o.public_number)} />
+			</div>
+			<div className="mt-1">
+				Buyer:{" "}
+				{o.buyer?.kind === "company"
+					? `${b.legalName ?? ""} (${b.regNumber ?? ""})`
+					: (b.fullName ?? "")}{" "}
+				· {b.country ?? ""}
+			</div>
+			<div className="mt-1">
+				Status: {o.status} · confirmed{" "}
+				{o.confirmed_at ? new Date(o.confirmed_at).toLocaleString() : "—"}
+			</div>
+		</div>
+	);
+}
+function BankDetailsLink({ id }: { id: string }) {
+	return (
+		<div className="mt-2">
+			<BankOrderDetails id={id} />
+		</div>
+	);
+}
+function BankAdminCard(props: {
+	order: any;
+	busyId: string;
+	pay: any;
+	setPay: (v: any) => void;
+	refund: any;
+	setRefund: (v: any) => void;
+	evidenceMsg: string;
+	setEvidenceMsg: (v: string) => void;
+	call: (action: string, body: any, orderId: string) => void;
+}) {
+	const {
+		order,
+		busyId,
+		pay,
+		setPay,
+		refund,
+		setRefund,
+		evidenceMsg,
+		setEvidenceMsg,
+		call,
+	} = props;
+	const o = order.order;
+	const paid =
+		(order.payments as any[]).reduce(
+			(n: number, r: any) => n + Number(r.amount_cents),
+			0,
+		) / 100;
+	const labels: Record<string, string> = {
+		awaiting_payment: "Awaiting payment",
+		confirmed: "Awaiting payment",
+		partial: "Partial payment — manual review",
+		review: "Payment under review",
+		reported: "Payment reported — verify receipt",
+		credited: "Paid — tokens credited",
+		cancelled: "Cancelled",
+		refunded: "Refund processed",
+	};
+	async function upload(ev: React.ChangeEvent<HTMLInputElement>) {
+		const f = ev.target.files?.[0];
+		if (!f) return;
+		const fd = new FormData();
+		fd.append("orderId", o.id);
+		fd.append("file", f);
+		setEvidenceMsg("Uploading...");
+		try {
+			const r = await fetch("/api/bank-transfer/evidence", {
+				method: "POST",
+				body: fd,
+			});
+			const j = await r.json();
+			if (!r.ok) throw new Error(j.error || "Upload failed");
+			setEvidenceMsg("Evidence attached.");
+		} catch (e) {
+			setEvidenceMsg((e as Error).message);
+		}
+		ev.target.value = "";
+	}
+	return (
+		<div className="mt-3 rounded-xl border border-[#e93e3a] p-3 text-xs text-[#d0c6b4]">
+			<div className="font-bold text-white">
+				Admin transfer card: {o.public_number} ·{" "}
+				{currency(Number(o.eur_amount))} · {labels[o.status] ?? o.status}
+			</div>
+			<div className="mt-1">
+				Paid {currency(paid)} of {currency(Number(o.eur_amount))}; remaining{" "}
+				{currency(Math.max(0, Number(o.eur_amount) - paid))} · Mail:{" "}
+				{order.mail ? `${order.mail.state}` : "no record"}
+			</div>
+			<div className="mt-2">
+				Reference {o.public_number}
+				<CopyText text={o.public_number} />
+			</div>
+			<div className="mt-2">
+				<button
+					type="button"
+					disabled={busyId === o.id + "payment"}
+					onClick={() =>
+						void call(
+							"payment",
+							{
+								orderId: o.id,
+								senderName: pay.senderName,
+								amount: Number(pay.amount),
+								currency: pay.currency,
+								receivedDate: pay.receivedDate,
+								bankRef: pay.bankRef || null,
+								paymentRef: pay.paymentRef,
+								matchBasis: pay.matchBasis,
+								idempotencyKey: crypto.randomUUID(),
+							},
+							o.id,
+						)
+					}
+					className="rounded-full border px-3 py-1.5 font-bold"
+				>
+					Record receipt
+				</button>{" "}
+				<button
+					type="button"
+					disabled={busyId === o.id + "credit"}
+					onClick={() =>
+						void call("credit", { orderId: o.id, note: "manual confirm" }, o.id)
+					}
+					className="rounded-full border border-[#1f8a3b] px-3 py-1.5 font-bold"
+				>
+					Confirm receipt — credit once
+				</button>
+			</div>
+			<div className="mt-3">
+				Evidence:{" "}
+				{(order.evidence as any[]).map((e: any) => (
+					<div key={e.id}>
+						{e.file_name} ·{" "}
+						<a
+							className="underline"
+							href={`/api/bank-transfer/documents?evidenceId=${e.id}`}
+						>
+							Download
+						</a>
+					</div>
+				))}
+				<label className="mt-1 block">
+					Attach PDF/CSV/PNG/JPEG up to 15MB{" "}
+					<input
+						type="file"
+						accept=".pdf,.csv,.png,.jpg,.jpeg"
+						onChange={(e) => void upload(e)}
+					/>
+				</label>
+				{evidenceMsg ? <div>{evidenceMsg}</div> : null}
+				<label className="mt-1 block">
+					Attach signed contract (PDF){" "}
+					<input
+						type="file"
+						accept=".pdf"
+						onChange={(e) => {
+							const f = e.target.files?.[0];
+							if (!f) return;
+							const r = new FileReader();
+							r.onload = () => {
+								const b64 = String(r.result).split(",")[1];
+								void call(
+									"contract",
+									{
+										orderId: o.id,
+										fileName: f.name,
+										mime: "application/pdf",
+										dataBase64: b64,
+									},
+									o.id,
+								);
+							};
+							r.readAsDataURL(f);
+						}}
+					/>
+				</label>
+			</div>
+			<div className="mt-3">
+				Documents:{" "}
+				{(order.docs as any[]).map((d: any) => (
+					<div key={d.id}>
+						{d.kind} {d.doc_number} v{d.version}{" "}
+						<a
+							className="underline"
+							href={`/api/bank-transfer/documents?kind=document&doc=${d.id}`}
+						>
+							PDF
+						</a>
+					</div>
+				))}
+				<a
+					className="mt-1 underline inline-block"
+					href={`/api/bank-transfer/admin?action=dossier&orderId=${o.id}`}
+				>
+					Download dossier (ZIP)
+				</a>
+			</div>
+			<div className="mt-3">
+				Refunds:{" "}
+				{(order.refunds as any[]).map((r: any) => (
+					<div key={r.id}>
+						{r.status} €{Number(r.amount_cents) / 100} {r.bank_ref} {r.reason}
+					</div>
+				))}
+				<div className="grid grid-cols-2 gap-2 mt-1">
+					<BankField
+						label="Refund EUR"
+						value={refund.amount}
+						set={(v) => setRefund({ ...refund, amount: v })}
+					/>
+					<BankField
+						label="Refund bank ref"
+						value={refund.bankRef}
+						set={(v) => setRefund({ ...refund, bankRef: v })}
+					/>
+				</div>
+				<BankField
+					label="Reason"
+					value={refund.reason}
+					set={(v) => setRefund({ ...refund, reason: v })}
+				/>
+				<BankField
+					label="Token correction"
+					value={refund.tokenCorrection}
+					set={(v) => setRefund({ ...refund, tokenCorrection: v })}
+				/>
+				<button
+					type="button"
+					disabled={busyId === o.id + "refund"}
+					className="mt-1 rounded-full border px-3 py-1.5"
+					onClick={() =>
+						void call(
+							"refund",
+							{
+								orderId: o.id,
+								amount: Number(refund.amount) || 0,
+								status: "executed",
+								reason: refund.reason,
+								bankRef: refund.bankRef,
+								tokenCorrection: Number(refund.tokenCorrection) || 0,
+							},
+							o.id,
+						)
+					}
+				>
+					Record executed refund
+				</button>
+			</div>
+			<div className="mt-3">
+				History:{" "}
+				{(order.history as any[]).map((h: any, i: number) => (
+					<div key={i}>
+						{String(h.created_at)} · {h.actor_email} · {h.action}
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+type TokenOrder = {
+	id: string;
+	eur_amount: number;
+	tokens: number;
+	status: string;
+	admin_note?: string;
+	created_at: string;
+	decided_at?: string | null;
+	email?: string;
+	user_id?: string;
+};
 type Space = { id: string; title: string; mode: Mode };
 type Run = {
 	id: string;
@@ -149,23 +511,54 @@ export function Workspace() {
 	const [customEur, setCustomEur] = useState(20);
 	const [orders, setOrders] = useState<TokenOrder[]>([]);
 	const [isAdmin, setIsAdmin] = useState(false);
- const [onlineEnabled, setOnlineEnabled] = useState(false);
- const [paymentOrders, setPaymentOrders] = useState<TokenOrder[]>([]);
- const [checkoutRequest, setCheckoutRequest] = useState<{packageId: string; requestId: string} | null>(null);
+	const [onlineEnabled, setOnlineEnabled] = useState(false);
+	const [paymentOrders, setPaymentOrders] = useState<TokenOrder[]>([]);
+	const [checkoutRequest, setCheckoutRequest] = useState<{
+		packageId: string;
+		requestId: string;
+	} | null>(null);
 	const [orderMsg, setOrderMsg] = useState("");
 	const [adminNote, setAdminNote] = useState("");
 	const [adminBusyId, setAdminBusyId] = useState("");
 	const [bankEur, setBankEur] = useState(20);
-	const [bankKind, setBankKind] = useState<"person"|"company">("person");
-	const [bankBuyer, setBankBuyer] = useState<BankBuyer>({fullName:"",legalName:"",regNumber:"",repName:"",vat:"",country:"",address:""});
+	const [bankKind, setBankKind] = useState<"person" | "company">("person");
+	const [bankBuyer, setBankBuyer] = useState<BankBuyer>({
+		fullName: "",
+		legalName: "",
+		regNumber: "",
+		repName: "",
+		vat: "",
+		country: "",
+		address: "",
+	});
 	const [bankAccepted, setBankAccepted] = useState(false);
-	const [bankOrder, setBankOrder] = useState<null|{id:string;publicNumber:string;eur:number;tokens:number;status:string}>(null);
+	const [bankOrder, setBankOrder] = useState<null | {
+		id: string;
+		publicNumber: string;
+		eur: number;
+		tokens: number;
+		status: string;
+	}>(null);
 	const [bankOrders, setBankOrders] = useState<any[]>([]);
-	const [bankProfile, setBankProfile] = useState<any|null>(null);
-	const [bankRequestId, setBankRequestId] = useState<string|null>(null);
-	const [bankAdmin, setBankAdmin] = useState<any|null>(null);
-	const [bankPay, setBankPay] = useState({senderName:"",amount:"",currency:"EUR",receivedDate:"",bankRef:"",paymentRef:"",matchBasis:""});
-	const [bankRefund, setBankRefund] = useState({amount:"",status:"requested",reason:"",bankRef:"",tokenCorrection:"0"});
+	const [bankProfile, setBankProfile] = useState<any | null>(null);
+	const [bankRequestId, setBankRequestId] = useState<string | null>(null);
+	const [bankAdmin, setBankAdmin] = useState<any | null>(null);
+	const [bankPay, setBankPay] = useState({
+		senderName: "",
+		amount: "",
+		currency: "EUR",
+		receivedDate: "",
+		bankRef: "",
+		paymentRef: "",
+		matchBasis: "",
+	});
+	const [bankRefund, setBankRefund] = useState({
+		amount: "",
+		status: "requested",
+		reason: "",
+		bankRef: "",
+		tokenCorrection: "0",
+	});
 	const [bankEvidenceMsg, setBankEvidenceMsg] = useState("");
 
 	// Drawers and dialogs must not scroll the background page.
@@ -207,7 +600,9 @@ export function Workspace() {
 
 	const refreshOrders = useCallback(async () => {
 		try {
-			const data = await request<{ orders: TokenOrder[]; isAdmin: boolean }>("/api/orders");
+			const data = await request<{ orders: TokenOrder[]; isAdmin: boolean }>(
+				"/api/orders",
+			);
 			setOrders(data.orders);
 			setIsAdmin(data.isAdmin);
 		} catch {
@@ -220,71 +615,176 @@ export function Workspace() {
 	}, [topupOpen, account, refreshOrders]);
 	const refreshBank = useCallback(async () => {
 		try {
-			const data = await request<{orders:any[];profile:any}>(`/api/bank-transfer/orders`);
-			setBankOrders(data.orders ?? []); setBankProfile(data.profile ?? null);
-		} catch (e) { setError((e as Error).message); }
+			const data = await request<{ orders: any[]; profile: any }>(
+				`/api/bank-transfer/orders`,
+			);
+			setBankOrders(data.orders ?? []);
+			setBankProfile(data.profile ?? null);
+		} catch (e) {
+			setError((e as Error).message);
+		}
 	}, []);
 	const refreshBankAdmin = useCallback(async (id: string) => {
-		try { const data = await request<{order:any;payments:any[];evidence:any[];mail:any;docs:any[];history:any[];refunds:any[]}>(`/api/bank-transfer/orders?id=${encodeURIComponent(id)}`); setBankAdmin(data); }
-		catch (e) { setError((e as Error).message); }
+		try {
+			const data = await request<{
+				order: any;
+				payments: any[];
+				evidence: any[];
+				mail: any;
+				docs: any[];
+				history: any[];
+				refunds: any[];
+			}>(`/api/bank-transfer/orders?id=${encodeURIComponent(id)}`);
+			setBankAdmin(data);
+		} catch (e) {
+			setError((e as Error).message);
+		}
 	}, []);
-	useEffect(() => { if (topupOpen && account) void refreshBank(); }, [topupOpen, account, refreshBank]);
-	useEffect(() => { if (bankProfile && !bankOrder) setBankBuyer({fullName:bankProfile.fullName ?? "",legalName:bankProfile.legalName ?? "",regNumber:bankProfile.regNumber ?? "",repName:bankProfile.repName ?? "",vat:bankProfile.vat ?? "",country:bankProfile.country ?? "",address:bankProfile.address ?? ""}); }, [bankProfile, bankOrder]);
+	useEffect(() => {
+		if (topupOpen && account) void refreshBank();
+	}, [topupOpen, account, refreshBank]);
+	useEffect(() => {
+		if (bankProfile && !bankOrder)
+			setBankBuyer({
+				fullName: bankProfile.fullName ?? "",
+				legalName: bankProfile.legalName ?? "",
+				regNumber: bankProfile.regNumber ?? "",
+				repName: bankProfile.repName ?? "",
+				vat: bankProfile.vat ?? "",
+				country: bankProfile.country ?? "",
+				address: bankProfile.address ?? "",
+			});
+	}, [bankProfile, bankOrder]);
 	async function createBankOrder() {
-		if (!account) { setAuthOpen(true); return; }
-		setBusy(true); setError(""); setOrderMsg("");
+		if (!account) {
+			setAuthOpen(true);
+			return;
+		}
+		setBusy(true);
+		setError("");
+		setOrderMsg("");
 		try {
 			const requestId = bankRequestId ?? crypto.randomUUID();
 			setBankRequestId(requestId);
-			const res = await request<{order:{id:string;publicNumber:string;eur:number;tokens:number;status:string}}>("/api/bank-transfer/orders", {method:"POST", body:JSON.stringify({eurAmount:bankEur, requestId, acceptedTerms:bankAccepted, buyer:{kind:bankKind, email:account.email, ...bankBuyer}})});
-			setBankOrder(res.order); setOrderMsg(`Bank transfer order ${res.order.publicNumber} accepted.`);
-			void refreshBank(); void refreshTokens();
-		} catch(e){ setError((e as Error).message);} finally { setBusy(false); }
+			const res = await request<{
+				order: {
+					id: string;
+					publicNumber: string;
+					eur: number;
+					tokens: number;
+					status: string;
+				};
+			}>("/api/bank-transfer/orders", {
+				method: "POST",
+				body: JSON.stringify({
+					eurAmount: bankEur,
+					requestId,
+					acceptedTerms: bankAccepted,
+					buyer: { kind: bankKind, email: account.email, ...bankBuyer },
+				}),
+			});
+			setBankOrder(res.order);
+			setOrderMsg(`Bank transfer order ${res.order.publicNumber} accepted.`);
+			void refreshBank();
+			void refreshTokens();
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
 	}
 	async function reportBankPaid(id: string) {
-		setBusy(true); setError("");
-		try { await request("/api/bank-transfer/reported",{method:"POST",body:JSON.stringify({orderId:id})}); setOrderMsg("Thanks — the administrator will verify the bank receipt. This does not credit tokens yet."); void refreshBank(); }
-		catch(e){ setError((e as Error).message);} finally { setBusy(false); }
+		setBusy(true);
+		setError("");
+		try {
+			await request("/api/bank-transfer/reported", {
+				method: "POST",
+				body: JSON.stringify({ orderId: id }),
+			});
+			setOrderMsg(
+				"Thanks — the administrator will verify the bank receipt. This does not credit tokens yet.",
+			);
+			void refreshBank();
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
 	}
 	async function bankAdminCall(action: string, body: any, orderId: string) {
-		setAdminBusyId(orderId+action); setError("");
-		try { await request(`/api/bank-transfer/admin?action=${action}`,{method:"POST",body:JSON.stringify(body)}); await refreshBankAdmin(orderId); void refreshBank(); void refreshTokens(); }
-		catch(e){ setError((e as Error).message);} finally { setAdminBusyId(""); }
+		setAdminBusyId(orderId + action);
+		setError("");
+		try {
+			await request(`/api/bank-transfer/admin?action=${action}`, {
+				method: "POST",
+				body: JSON.stringify(body),
+			});
+			await refreshBankAdmin(orderId);
+			void refreshBank();
+			void refreshTokens();
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setAdminBusyId("");
+		}
 	}
 
+	const refreshPayments = useCallback(
+		async (orderId?: string) => {
+			try {
+				const data = await request<{ enabled: boolean; orders: TokenOrder[] }>(
+					`/api/payments${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ""}`,
+				);
+				setOnlineEnabled(data.enabled);
+				setPaymentOrders(data.orders);
+				if (orderId) {
+					const order = data.orders.find((o) => o.id === orderId);
+					setOrderMsg(
+						order?.status === "credited"
+							? "Payment confirmed. Tokens credited."
+							: "Payment is not confirmed yet. Use Check payment status to refresh. Do not pay again while confirmation is pending.",
+					);
+					void refreshTokens();
+				}
+			} catch (e) {
+				setError((e as Error).message);
+			}
+		},
+		[refreshTokens],
+	);
+	useEffect(() => {
+		if (topupOpen && account)
+			void refreshPayments(searchParams.get("paymentOrder") || undefined);
+	}, [topupOpen, account, refreshPayments, searchParams]);
 
- const refreshPayments = useCallback(async (orderId?: string) => {
-   try {
-     const data = await request<{enabled: boolean; orders: TokenOrder[]}>(`/api/payments${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ""}`);
-     setOnlineEnabled(data.enabled);
-     setPaymentOrders(data.orders);
-     if (orderId) {
-       const order = data.orders.find(o => o.id === orderId);
-       setOrderMsg(order?.status === "credited" ? "Payment confirmed. Tokens credited." : "Payment is not confirmed yet. Use Check payment status to refresh. Do not pay again while confirmation is pending.");
-       void refreshTokens();
-     }
-   } catch (e) { setError((e as Error).message); }
- }, [refreshTokens]);
- useEffect(() => {
-   if (topupOpen && account) void refreshPayments(searchParams.get("paymentOrder") || undefined);
- }, [topupOpen, account, refreshPayments, searchParams]);
-
- async function checkout(packageId: keyof typeof TOKEN_PACKAGES) {
-   if (!account) { setAuthOpen(true); return; }
-   setBusy(true); setError(""); setOrderMsg("");
-   // Keep UUID across ambiguous timeouts/reloads and switching back to the same package.
-   const key = `velora-checkout:${account.id}:${packageId}`;
-   try {
-     const requestId = sessionStorage.getItem(key) || crypto.randomUUID();
-     sessionStorage.setItem(key, requestId);
-     setCheckoutRequest({packageId, requestId});
-     const result = await request<{checkoutUrl: string; orderId: string}>("/api/payments/checkout", {
-       method: "POST", body: JSON.stringify({packageId, requestId}),
-     });
-     window.location.assign(result.checkoutUrl);
-   } catch (e) { setError((e as Error).message); }
-   finally { setBusy(false); }
- }
+	async function checkout(packageId: keyof typeof TOKEN_PACKAGES) {
+		if (!account) {
+			setAuthOpen(true);
+			return;
+		}
+		setBusy(true);
+		setError("");
+		setOrderMsg("");
+		// Keep UUID across ambiguous timeouts/reloads and switching back to the same package.
+		const key = `velora-checkout:${account.id}:${packageId}`;
+		try {
+			const requestId = sessionStorage.getItem(key) || crypto.randomUUID();
+			sessionStorage.setItem(key, requestId);
+			setCheckoutRequest({ packageId, requestId });
+			const result = await request<{ checkoutUrl: string; orderId: string }>(
+				"/api/payments/checkout",
+				{
+					method: "POST",
+					body: JSON.stringify({ packageId, requestId }),
+				},
+			);
+			window.location.assign(result.checkoutUrl);
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	}
 
 	async function placeOrder(eurAmount: number) {
 		if (!account) {
@@ -299,7 +799,9 @@ export function Workspace() {
 				method: "POST",
 				body: JSON.stringify({ eurAmount }),
 			});
-			setOrderMsg(`Order placed: €${res.order.eur_amount} = ${res.order.tokens.toLocaleString("en-US")} tokens. Status: pending invoice.`);
+			setOrderMsg(
+				`Order placed: €${res.order.eur_amount} = ${res.order.tokens.toLocaleString("en-US")} tokens. Status: pending invoice.`,
+			);
 			void refreshOrders();
 		} catch (e) {
 			setError((e as Error).message);
@@ -308,7 +810,10 @@ export function Workspace() {
 		}
 	}
 
-	async function decideOrder(id: string, action: "invoiced" | "credited" | "cancelled") {
+	async function decideOrder(
+		id: string,
+		action: "invoiced" | "credited" | "cancelled",
+	) {
 		setAdminBusyId(id);
 		setError("");
 		try {
@@ -436,10 +941,10 @@ export function Workspace() {
 				needsVerification?: boolean;
 				emailSent?: boolean;
 				devVerifyLink?: string;
-			}>(
-				`/api/auth?action=${authMode}`,
-				{ method: "POST", body: JSON.stringify({ email, password }) },
-			);
+			}>(`/api/auth?action=${authMode}`, {
+				method: "POST",
+				body: JSON.stringify({ email, password }),
+			});
 			if (data.needsVerification) {
 				setVerifyNotice(
 					data.emailSent
@@ -447,9 +952,7 @@ export function Workspace() {
 						: "Account created, but the confirmation email could not be sent yet. Use Resend below.",
 				);
 				if (data.devVerifyLink)
-					setVerifyNotice(
-						(prev) => `${prev} Dev link: ${data.devVerifyLink}`,
-					);
+					setVerifyNotice((prev) => `${prev} Dev link: ${data.devVerifyLink}`);
 				setAuthMode("login");
 				setPassword("");
 				return;
@@ -1104,10 +1607,16 @@ export function Workspace() {
 							{Object.entries(TOKEN_PACKAGES).map(([id, p]) => (
 								<button
 									key={id}
-                                    type="button"
-                                    disabled={busy || !onlineEnabled}
-                                    title={onlineEnabled ? "Continue to Infini" : "Online payments are not configured"}
-									onClick={() => void checkout(id as keyof typeof TOKEN_PACKAGES)}
+									type="button"
+									disabled={busy || !onlineEnabled}
+									title={
+										onlineEnabled
+											? "Continue to Infini"
+											: "Online payments are not configured"
+									}
+									onClick={() =>
+										void checkout(id as keyof typeof TOKEN_PACKAGES)
+									}
 									className="bg-[#120a05] border border-[#3a2a1a] p-4 rounded-xl text-left hover:border-[#f54900] transition-colors disabled:opacity-60"
 								>
 									<div className="text-xs text-[#8a7e6f]">{p.label}</div>
@@ -1117,106 +1626,422 @@ export function Workspace() {
 									<div className="text-xs text-[#f3913e] mt-1">
 										{p.tokens.toLocaleString("en-US")} tokens
 									</div>
-									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">{onlineEnabled ? "Pay with Infini ↗" : "Online payment unavailable"}</div>
+									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">
+										{onlineEnabled
+											? "Pay with Infini ↗"
+											: "Online payment unavailable"}
+									</div>
 								</button>
 							))}
 						</div>
 
-                        {!onlineEnabled && <p className="text-sm text-[#ffe4a6]">Online payments are not enabled. No charge has been made. Invoice orders remain available below.</p>}
-                        <div className="mt-4 text-sm text-[#b8ac90]">
-                          <p>Online payment orders</p>
-                          {paymentOrders.length === 0 && <p className="text-xs">No online orders yet.</p>}
-                          {paymentOrders.map(o => <div key={o.id} className="mt-2 rounded-lg border border-[#3a2a1a] p-3">
-                            €{o.eur_amount} · {o.tokens.toLocaleString("en-US")} tokens · {o.status}
-                            {o.status !== "credited" && <button type="button" disabled={busy || !onlineEnabled} className="block mt-2 underline" onClick={() => void refreshPayments(o.id)}>Check payment status</button>}
-                            {o.status === "credited" && <button type="button" className="block mt-2 underline" onClick={() => {
-                              for (const id of Object.keys(TOKEN_PACKAGES)) {
-                                const key = `velora-checkout:${account?.id}:${id}`;
-                                if (sessionStorage.getItem(key) === o.id) sessionStorage.removeItem(key);
-                              }
-                              setCheckoutRequest(null); setOrderMsg("You can now select a package for a new purchase.");
-                            }}>Start a new purchase</button>}
-                          </div>)}
-                          {checkoutRequest && <p className="text-xs mt-2">Retrying the same package reuses order {checkoutRequest.requestId.slice(0,8)} to avoid duplicate charges.</p>}
-                        </div>
+						{!onlineEnabled && (
+							<p className="text-sm text-[#ffe4a6]">
+								Online payments are not enabled. No charge has been made.
+								Invoice orders remain available below.
+							</p>
+						)}
+						<div className="mt-4 text-sm text-[#b8ac90]">
+							<p>Online payment orders</p>
+							{paymentOrders.length === 0 && (
+								<p className="text-xs">No online orders yet.</p>
+							)}
+							{paymentOrders.map((o) => (
+								<div
+									key={o.id}
+									className="mt-2 rounded-lg border border-[#3a2a1a] p-3"
+								>
+									€{o.eur_amount} · {o.tokens.toLocaleString("en-US")} tokens ·{" "}
+									{o.status}
+									{o.status !== "credited" && (
+										<button
+											type="button"
+											disabled={busy || !onlineEnabled}
+											className="block mt-2 underline"
+											onClick={() => void refreshPayments(o.id)}
+										>
+											Check payment status
+										</button>
+									)}
+									{o.status === "credited" && (
+										<button
+											type="button"
+											className="block mt-2 underline"
+											onClick={() => {
+												for (const id of Object.keys(TOKEN_PACKAGES)) {
+													const key = `velora-checkout:${account?.id}:${id}`;
+													if (sessionStorage.getItem(key) === o.id)
+														sessionStorage.removeItem(key);
+												}
+												setCheckoutRequest(null);
+												setOrderMsg(
+													"You can now select a package for a new purchase.",
+												);
+											}}
+										>
+											Start a new purchase
+										</button>
+									)}
+								</div>
+							))}
+							{checkoutRequest && (
+								<p className="text-xs mt-2">
+									Retrying the same package reuses order{" "}
+									{checkoutRequest.requestId.slice(0, 8)} to avoid duplicate
+									charges.
+								</p>
+							)}
+						</div>
 						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
-							<div className="text-xs text-[#8a7e6f] font-bold uppercase">Bank transfer (€1–€2,500)</div>
-							<div className="mt-2 flex items-baseline justify-between gap-3">
-								<span className="text-2xl font-black text-white">€{bankEur}</span>
-								<span className="text-sm font-bold text-[#f3913e]">{(bankEur*100).toLocaleString("en-US")} tokens</span>
+							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
+								Bank transfer (€1–€10,000)
 							</div>
-							<label className="mt-3 block text-xs text-[#b8ac90]" htmlFor="bank-eur">Amount between €1 and €2,500, step €1</label>
-							<input id="bank-eur" type="number" min={1} max={2500} step={1} value={bankEur} onChange={(e)=>setBankEur(Math.max(1,Math.min(2500,Number(e.target.value)||1)))} className="mt-2 w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none" />
+							<div className="mt-2 flex items-baseline justify-between gap-3">
+								<span className="text-2xl font-black text-white">
+									€{bankEur}
+								</span>
+								<span className="text-sm font-bold text-[#f3913e]">
+									{(bankEur * 100).toLocaleString("en-US")} tokens
+								</span>
+							</div>
+							<label
+								className="mt-3 block text-xs text-[#b8ac90]"
+								htmlFor="bank-eur"
+							>
+								Amount between €1 and €10,000, step €1
+							</label>
+							<input
+								id="bank-eur"
+								type="number"
+								min={1}
+								max={10000}
+								step={1}
+								value={bankEur}
+								onChange={(e) =>
+									setBankEur(
+										Math.max(1, Math.min(10000, Number(e.target.value) || 1)),
+									)
+								}
+								className="mt-2 w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
+							/>
 							<div className="mt-3 flex gap-2 text-xs">
-								{(["person","company"] as const).map((k)=><button key={k} type="button" onClick={()=>setBankKind(k)} className={`rounded-full px-3 py-1.5 border ${bankKind===k?"border-[#f54900] text-white":"border-[#3a2a1a] text-[#8a7e6f]"}`}>{k==="person"?"Individual":"Company"}</button>)}
+								{(["person", "company"] as const).map((k) => (
+									<button
+										key={k}
+										type="button"
+										onClick={() => setBankKind(k)}
+										className={`rounded-full px-3 py-1.5 border ${bankKind === k ? "border-[#f54900] text-white" : "border-[#3a2a1a] text-[#8a7e6f]"}`}
+									>
+										{k === "person" ? "Individual" : "Company"}
+									</button>
+								))}
 							</div>
 							<div className="mt-3 grid grid-cols-1 gap-2 text-xs">
-								<BankField label="Country" value={bankBuyer.country} set={(v)=>setBankBuyer({...bankBuyer,country:v})} />
-								<BankField label="Full address" value={bankBuyer.address} set={(v)=>setBankBuyer({...bankBuyer,address:v})} />
-								{bankKind==="person" ? <BankField label="First and last name" value={bankBuyer.fullName} set={(v)=>setBankBuyer({...bankBuyer,fullName:v})} /> : <>
-									<BankField label="Legal name" value={bankBuyer.legalName} set={(v)=>setBankBuyer({...bankBuyer,legalName:v})} />
-									<BankField label="Registration number" value={bankBuyer.regNumber} set={(v)=>setBankBuyer({...bankBuyer,regNumber:v})} />
-									<BankField label="Representative" value={bankBuyer.repName} set={(v)=>setBankBuyer({...bankBuyer,repName:v})} />
-									<BankField label="VAT (optional)" value={bankBuyer.vat} set={(v)=>setBankBuyer({...bankBuyer,vat:v})} />
-								</>}
+								<BankField
+									label="Country"
+									value={bankBuyer.country}
+									set={(v) => setBankBuyer({ ...bankBuyer, country: v })}
+								/>
+								<BankField
+									label="Full address"
+									value={bankBuyer.address}
+									set={(v) => setBankBuyer({ ...bankBuyer, address: v })}
+								/>
+								{bankKind === "person" ? (
+									<BankField
+										label="First and last name"
+										value={bankBuyer.fullName}
+										set={(v) => setBankBuyer({ ...bankBuyer, fullName: v })}
+									/>
+								) : (
+									<>
+										<BankField
+											label="Legal name"
+											value={bankBuyer.legalName}
+											set={(v) => setBankBuyer({ ...bankBuyer, legalName: v })}
+										/>
+										<BankField
+											label="Registration number"
+											value={bankBuyer.regNumber}
+											set={(v) => setBankBuyer({ ...bankBuyer, regNumber: v })}
+										/>
+										<BankField
+											label="Representative"
+											value={bankBuyer.repName}
+											set={(v) => setBankBuyer({ ...bankBuyer, repName: v })}
+										/>
+										<BankField
+											label="VAT (optional)"
+											value={bankBuyer.vat}
+											set={(v) => setBankBuyer({ ...bankBuyer, vat: v })}
+										/>
+									</>
+								)}
 							</div>
-							<label className="mt-3 flex items-start gap-2 text-xs text-[#b8ac90]"><input type="checkbox" checked={bankAccepted} onChange={(e)=>setBankAccepted(e.target.checked)} className="mt-1" /><span>I accept the purchase terms and refund policy shown for this order. <Link href="/terms-and-conditions" className="underline">Terms</Link> · <Link href="/privacy-policy" className="underline">Privacy</Link></span></label>
-							<button type="button" disabled={busy||!bankAccepted} onClick={()=>void createBankOrder()} className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#f3913e] to-[#f54900] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60">Confirm order and get details</button>
-							{bankOrder ? <div className="mt-3 rounded-lg border border-[#1f8a3b] bg-[#0f2e1a] p-3 text-xs text-[#7dffa8]">
-								<div className="font-bold">Order {bankOrder.publicNumber}: €{bankOrder.eur} = {bankOrder.tokens.toLocaleString("en-US")} tokens · {bankOrder.status}</div>
-								<BankDetailsLink id={bankOrder.id} />
-								<p className="mt-2">Transfer the exact amount and include the order number in the payment reference. Pay from the buyer account shown above. Tokens are credited after receipt is confirmed.</p>
-								{["awaiting_payment","confirmed","partial","review"].includes(bankOrder.status) ? <button type="button" disabled={busy} onClick={()=>void reportBankPaid(bankOrder.id)} className="mt-2 rounded-full border border-[#1f8a3b] px-3 py-1.5 font-bold">I paid — request verification</button> : null}
-							</div> : null}
-							<div className="mt-3 text-xs text-[#8a7e6f]">My transfer orders</div>
-							{bankOrders.length===0 ? <p className="text-xs text-[#8a7e6f]">No transfer orders yet.</p> : <ul className="mt-2 space-y-2">{bankOrders.map((o:any)=><li key={o.id} className="rounded-lg border border-[#2a1c10] p-2 text-xs"><span className="font-bold text-white">{o.public_number}</span> · €{o.eur_amount} · {o.status}{isAdmin ? <button type="button" className="ml-2 underline" onClick={()=>void refreshBankAdmin(o.id)}>Open in admin</button> : null}</li>)}</ul>}
-						</div>
-						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
-							<div className="text-xs text-[#8a7e6f] font-bold uppercase">Custom amount (invoice order)</div>
-							<div className="mt-2 flex items-baseline justify-between gap-3">
-								<span className="text-2xl font-black text-white">€{customEur}</span>
-								<span className="text-sm font-bold text-[#f3913e]">{(customEur * TOKENS_PER_EUR).toLocaleString("en-US")} tokens</span>
+							<label className="mt-3 flex items-start gap-2 text-xs text-[#b8ac90]">
+								<input
+									type="checkbox"
+									checked={bankAccepted}
+									onChange={(e) => setBankAccepted(e.target.checked)}
+									className="mt-1"
+								/>
+								<span>
+									I accept the purchase terms and refund policy shown for this
+									order.{" "}
+									<Link href="/terms-and-conditions" className="underline">
+										Terms
+									</Link>{" "}
+									·{" "}
+									<Link href="/privacy-policy" className="underline">
+										Privacy
+									</Link>
+								</span>
+							</label>
+							<button
+								type="button"
+								disabled={busy || !bankAccepted}
+								onClick={() => void createBankOrder()}
+								className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#f3913e] to-[#f54900] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+							>
+								Confirm order and get details
+							</button>
+							{bankOrder ? (
+								<div className="mt-3 rounded-lg border border-[#1f8a3b] bg-[#0f2e1a] p-3 text-xs text-[#7dffa8]">
+									<div className="font-bold">
+										Order {bankOrder.publicNumber}: €{bankOrder.eur} ={" "}
+										{bankOrder.tokens.toLocaleString("en-US")} tokens ·{" "}
+										{bankOrder.status}
+									</div>
+									<BankDetailsLink id={bankOrder.id} />
+									<p className="mt-2">
+										Transfer the exact amount and include the order number in
+										the payment reference. Pay from the buyer account shown
+										above. Tokens are credited after receipt is confirmed.
+									</p>
+									{[
+										"awaiting_payment",
+										"confirmed",
+										"partial",
+										"review",
+									].includes(bankOrder.status) ? (
+										<button
+											type="button"
+											disabled={busy}
+											onClick={() => void reportBankPaid(bankOrder.id)}
+											className="mt-2 rounded-full border border-[#1f8a3b] px-3 py-1.5 font-bold"
+										>
+											I paid — request verification
+										</button>
+									) : null}
+								</div>
+							) : null}
+							<div className="mt-3 text-xs text-[#8a7e6f]">
+								My transfer orders
 							</div>
-							<label className="mt-3 block text-xs text-[#b8ac90]" htmlFor="studio-token-range">Choose an amount between €1 and €10,000</label>
-							<input id="studio-token-range" type="range" min={1} max={200} step={1} value={Math.min(customEur, 200)} onChange={(e) => setCustomEur(Number(e.target.value))} className="mt-2 w-full" />
-							<div className="mt-3 flex items-center gap-2">
-								<label className="text-xs text-[#8a7e6f]" htmlFor="studio-token-eur">€</label>
-								<input id="studio-token-eur" type="number" min={1} max={10000} step={1} value={customEur} onChange={(e) => setCustomEur(Math.max(1, Math.min(10000, Number(e.target.value) || 1)))} className="w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none" />
-								<button type="button" disabled={busy} onClick={() => void placeOrder(customEur)} className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#f3913e] to-[#f54900] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60">Place invoice order ↗</button>
-							</div>
-							<p className="mt-3 text-xs text-[#8a7e6f]">No online payment is taken here. After you place the order, {COMPANY.name} issues an invoice; tokens are credited by an administrator after payment.</p>
-						</div>
-						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
-							<div className="text-xs text-[#8a7e6f] font-bold uppercase">My invoice orders</div>
-							{orders.length === 0 ? (
-								<p className="mt-2 text-xs text-[#8a7e6f]">No orders yet. Place your first invoice order above.</p>
+							{bankOrders.length === 0 ? (
+								<p className="text-xs text-[#8a7e6f]">
+									No transfer orders yet.
+								</p>
 							) : (
-								<ul className="mt-3 space-y-2">
-									{orders.filter((o) => isAdmin || !o.email || true).slice(0, isAdmin ? 100 : 50).map((o) => (
-										<li key={o.id} className="rounded-lg border border-[#2a1c10] bg-[#1f140b] p-3 text-xs text-[#d0c6b4]">
-											<div className="flex items-center justify-between gap-2">
-												<span className="font-bold text-white">€{o.eur_amount} = {o.tokens.toLocaleString("en-US")} tokens</span>
-												<span className="rounded-full border border-[#3a2a1a] px-2 py-0.5 text-[10px] font-bold uppercase text-[#ffe4a6]">{o.status}</span>
-											</div>
-											<div className="mt-1 text-[11px] text-[#8a7e6f]">{new Date(o.created_at).toLocaleString()} · {o.id.slice(0, 8)}{o.email && isAdmin ? ` · ${o.email}` : ""}</div>
-											{o.admin_note && <div className="mt-1 text-[11px] text-[#ffe4a6]">Admin: {o.admin_note}</div>}
-											{isAdmin && o.status !== "credited" && o.status !== "cancelled" && (
-												<div className="mt-2 flex flex-wrap items-center gap-2">
-													<input value={adminBusyId === o.id ? "" : adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Admin note (optional)" maxLength={2000} className="min-w-0 flex-1 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none" />
-													<button type="button" disabled={adminBusyId === o.id} onClick={() => void decideOrder(o.id, "invoiced")} className="rounded-full border border-[#3a2a1a] px-3 py-1.5 text-[11px] font-bold text-[#ffe4a6] disabled:opacity-60">Invoiced</button>
-													<button type="button" disabled={adminBusyId === o.id} onClick={() => void decideOrder(o.id, "credited")} className="rounded-full bg-[#0f2e1a] border border-[#1f8a3b] px-3 py-1.5 text-[11px] font-bold text-[#33ec64] disabled:opacity-60">Credit tokens</button>
-													<button type="button" disabled={adminBusyId === o.id} onClick={() => void decideOrder(o.id, "cancelled")} className="rounded-full border border-[#e93e3a] px-3 py-1.5 text-[11px] font-bold text-[#ff9988] disabled:opacity-60">Cancel</button>
-												</div>
-											)}
+								<ul className="mt-2 space-y-2">
+									{bankOrders.map((o: any) => (
+										<li
+											key={o.id}
+											className="rounded-lg border border-[#2a1c10] p-2 text-xs"
+										>
+											<span className="font-bold text-white">
+												{o.public_number}
+											</span>{" "}
+											· €{o.eur_amount} · {o.status}
+											{isAdmin ? (
+												<button
+													type="button"
+													className="ml-2 underline"
+													onClick={() => void refreshBankAdmin(o.id)}
+												>
+													Open in admin
+												</button>
+											) : null}
 										</li>
 									))}
 								</ul>
 							)}
-							{isAdmin && <p className="mt-3 text-[11px] text-[#8a7e6f]">Administrator view: recent orders across all users. Only emails in ADMIN_EMAILS can credit tokens.</p>}
-							{isAdmin && bankAdmin ? <BankAdminCard order={bankAdmin} busyId={adminBusyId} pay={bankPay} setPay={setBankPay} refund={bankRefund} setRefund={setBankRefund} evidenceMsg={bankEvidenceMsg} setEvidenceMsg={setBankEvidenceMsg} call={bankAdminCall} /> : null}
+						</div>
+						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
+							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
+								Custom amount (invoice order)
+							</div>
+							<div className="mt-2 flex items-baseline justify-between gap-3">
+								<span className="text-2xl font-black text-white">
+									€{customEur}
+								</span>
+								<span className="text-sm font-bold text-[#f3913e]">
+									{(customEur * TOKENS_PER_EUR).toLocaleString("en-US")} tokens
+								</span>
+							</div>
+							<label
+								className="mt-3 block text-xs text-[#b8ac90]"
+								htmlFor="studio-token-range"
+							>
+								Choose an amount between €1 and €10,000
+							</label>
+							<input
+								id="studio-token-range"
+								type="range"
+								min={1}
+								max={10000}
+								step={1}
+								value={customEur}
+								onChange={(e) => setCustomEur(Number(e.target.value))}
+								className="mt-2 w-full"
+							/>
+							<div className="mt-3 flex items-center gap-2">
+								<label
+									className="text-xs text-[#8a7e6f]"
+									htmlFor="studio-token-eur"
+								>
+									€
+								</label>
+								<input
+									id="studio-token-eur"
+									type="number"
+									min={1}
+									max={10000}
+									step={1}
+									value={customEur}
+									onChange={(e) =>
+										setCustomEur(
+											Math.max(1, Math.min(10000, Number(e.target.value) || 1)),
+										)
+									}
+									className="w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
+								/>
+								<button
+									type="button"
+									disabled={busy}
+									onClick={() => void placeOrder(customEur)}
+									className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#f3913e] to-[#f54900] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+								>
+									Place invoice order ↗
+								</button>
+							</div>
+							<p className="mt-3 text-xs text-[#8a7e6f]">
+								No online payment is taken here. After you place the order,{" "}
+								{COMPANY.name} issues an invoice; tokens are credited by an
+								administrator after payment.
+							</p>
+						</div>
+						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
+							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
+								My invoice orders
+							</div>
+							{orders.length === 0 ? (
+								<p className="mt-2 text-xs text-[#8a7e6f]">
+									No orders yet. Place your first invoice order above.
+								</p>
+							) : (
+								<ul className="mt-3 space-y-2">
+									{orders
+										.filter((o) => isAdmin || !o.email || true)
+										.slice(0, isAdmin ? 100 : 50)
+										.map((o) => (
+											<li
+												key={o.id}
+												className="rounded-lg border border-[#2a1c10] bg-[#1f140b] p-3 text-xs text-[#d0c6b4]"
+											>
+												<div className="flex items-center justify-between gap-2">
+													<span className="font-bold text-white">
+														€{o.eur_amount} = {o.tokens.toLocaleString("en-US")}{" "}
+														tokens
+													</span>
+													<span className="rounded-full border border-[#3a2a1a] px-2 py-0.5 text-[10px] font-bold uppercase text-[#ffe4a6]">
+														{o.status}
+													</span>
+												</div>
+												<div className="mt-1 text-[11px] text-[#8a7e6f]">
+													{new Date(o.created_at).toLocaleString()} ·{" "}
+													{o.id.slice(0, 8)}
+													{o.email && isAdmin ? ` · ${o.email}` : ""}
+												</div>
+												{o.admin_note && (
+													<div className="mt-1 text-[11px] text-[#ffe4a6]">
+														Admin: {o.admin_note}
+													</div>
+												)}
+												{isAdmin &&
+													o.status !== "credited" &&
+													o.status !== "cancelled" && (
+														<div className="mt-2 flex flex-wrap items-center gap-2">
+															<input
+																value={adminBusyId === o.id ? "" : adminNote}
+																onChange={(e) => setAdminNote(e.target.value)}
+																placeholder="Admin note (optional)"
+																maxLength={2000}
+																className="min-w-0 flex-1 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
+															/>
+															<button
+																type="button"
+																disabled={adminBusyId === o.id}
+																onClick={() =>
+																	void decideOrder(o.id, "invoiced")
+																}
+																className="rounded-full border border-[#3a2a1a] px-3 py-1.5 text-[11px] font-bold text-[#ffe4a6] disabled:opacity-60"
+															>
+																Invoiced
+															</button>
+															<button
+																type="button"
+																disabled={adminBusyId === o.id}
+																onClick={() =>
+																	void decideOrder(o.id, "credited")
+																}
+																className="rounded-full bg-[#0f2e1a] border border-[#1f8a3b] px-3 py-1.5 text-[11px] font-bold text-[#33ec64] disabled:opacity-60"
+															>
+																Credit tokens
+															</button>
+															<button
+																type="button"
+																disabled={adminBusyId === o.id}
+																onClick={() =>
+																	void decideOrder(o.id, "cancelled")
+																}
+																className="rounded-full border border-[#e93e3a] px-3 py-1.5 text-[11px] font-bold text-[#ff9988] disabled:opacity-60"
+															>
+																Cancel
+															</button>
+														</div>
+													)}
+											</li>
+										))}
+								</ul>
+							)}
+							{isAdmin && (
+								<p className="mt-3 text-[11px] text-[#8a7e6f]">
+									Administrator view: recent orders across all users. Only
+									emails in ADMIN_EMAILS can credit tokens.
+								</p>
+							)}
+							{isAdmin && bankAdmin ? (
+								<BankAdminCard
+									order={bankAdmin}
+									busyId={adminBusyId}
+									pay={bankPay}
+									setPay={setBankPay}
+									refund={bankRefund}
+									setRefund={setBankRefund}
+									evidenceMsg={bankEvidenceMsg}
+									setEvidenceMsg={setBankEvidenceMsg}
+									call={bankAdminCall}
+								/>
+							) : null}
 						</div>
 						<p className="text-xs text-[#b8ac90]">
-							Infini handles online checkout; available methods depend on merchant approval. Tokens are credited only after server-side payment verification, not on return from checkout. Invoice orders remain separate. Token expiry enforcement, refunds and mandatory consumer disclosures must be completed before commercial launch. Tokens cannot be transferred or withdrawn.
+							Infini handles online checkout; available methods depend on
+							merchant approval. Tokens are credited only after server-side
+							payment verification, not on return from checkout. Invoice orders
+							remain separate. Token expiry enforcement, refunds and mandatory
+							consumer disclosures must be completed before commercial launch.
+							Tokens cannot be transferred or withdrawn.
 						</p>
 						<p className="text-xs text-[#b8ac90] mt-3">
 							<Link href="/terms-and-conditions">Terms and Conditions</Link> ·{" "}
@@ -1344,31 +2169,31 @@ export function Workspace() {
 								<>
 									Already have an account?{" "}
 									<button
-											className="text-[#ffe4a6] font-bold hover:underline"
-											onClick={() => {
-												setAuthMode("login");
-												setError("");
-												setVerifyNotice("");
-											}}
-										>
-											Sign in
-										</button>
-									</>
-								) : (
-									<>
-										Need an account?{" "}
-										<button
-											className="text-[#ffe4a6] font-bold hover:underline"
-											onClick={() => {
-												setAuthMode("register");
-												setError("");
-												setVerifyNotice("");
-											}}
-										>
-											Register
-										</button>
-									</>
-								)}
+										className="text-[#ffe4a6] font-bold hover:underline"
+										onClick={() => {
+											setAuthMode("login");
+											setError("");
+											setVerifyNotice("");
+										}}
+									>
+										Sign in
+									</button>
+								</>
+							) : (
+								<>
+									Need an account?{" "}
+									<button
+										className="text-[#ffe4a6] font-bold hover:underline"
+										onClick={() => {
+											setAuthMode("register");
+											setError("");
+											setVerifyNotice("");
+										}}
+									>
+										Register
+									</button>
+								</>
+							)}
 						</div>
 					</div>
 				</div>

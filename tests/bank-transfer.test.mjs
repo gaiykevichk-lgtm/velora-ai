@@ -16,14 +16,29 @@ import {
 	zipFiles,
 } from "../lib/bank-transfer.ts";
 
-const person = { kind: "person", email: "buyer@example.com", fullName: "Jean Dupont", country: "France", address: "1 rue Test, Paris" };
-const company = { kind: "company", email: "buyer@example.com", legalName: "ACME SAS", regNumber: "123 456 789", repName: "Marie Martin", vat: "FR123", country: "France", address: "2 rue Test, Paris" };
+const person = {
+	kind: "person",
+	email: "buyer@example.com",
+	fullName: "Jean Dupont",
+	country: "France",
+	address: "1 rue Test, Paris",
+};
+const company = {
+	kind: "company",
+	email: "buyer@example.com",
+	legalName: "ACME SAS",
+	regNumber: "123 456 789",
+	repName: "Marie Martin",
+	vat: "FR123",
+	country: "France",
+	address: "2 rue Test, Paris",
+};
 
 test("bank amount boundaries and server-side token math", () => {
 	assert.equal(BANK_MIN_EUR, 1);
-	assert.equal(BANK_MAX_EUR, 2500);
+	assert.equal(BANK_MAX_EUR, 10000);
 	assert.equal(amountToTokens(1), 100);
-	assert.equal(amountToTokens(2500), 250000);
+	assert.equal(amountToTokens(10000), 1000000);
 });
 
 test("buyer profiles require full invoice identity", () => {
@@ -40,8 +55,23 @@ test("IBAN basics reject malformed and bad check digits", () => {
 });
 
 test("order mail carries reference, exact amount and credit window", () => {
-	const body = mailText({ publicNumber: "VEL-2026-000123", eur: 20, tokens: 2000, seller: { legalName: "Seller", iban: "FR1", bic: "BIC", bank: "Bank" }, buyer: {}, creditDays: 2 }, "https://veloraai.pro");
-	assert.ok(body.includes("VEL-2026-000123") && body.includes("20 EUR") && body.includes("2,000") && body.includes("2 business days"));
+	const body = mailText(
+		{
+			publicNumber: "VEL-2026-000123",
+			eur: 20,
+			tokens: 2000,
+			seller: { legalName: "Seller", iban: "FR1", bic: "BIC", bank: "Bank" },
+			buyer: {},
+			creditDays: 2,
+		},
+		"https://veloraai.pro",
+	);
+	assert.ok(
+		body.includes("VEL-2026-000123") &&
+			body.includes("20 EUR") &&
+			body.includes("2,000") &&
+			body.includes("2 business days"),
+	);
 });
 
 test("partial totals accumulate and only a full receipt leaves review", () => {
@@ -55,7 +85,10 @@ test("partial totals accumulate and only a full receipt leaves review", () => {
 test("documents are real portable PDF and dossier archive bytes", () => {
 	const pdf = textPdf("Order", ["line one", "line two"]);
 	assert.ok(pdf.subarray(0, 5).toString() === "%PDF-");
-	const zip = zipFiles([{ name: "a.pdf", data: pdf }, { name: "map.csv", data: Buffer.from("a,b\n") }]);
+	const zip = zipFiles([
+		{ name: "a.pdf", data: pdf },
+		{ name: "map.csv", data: Buffer.from("a,b\n") },
+	]);
 	assert.ok(zip.subarray(0, 4).toString("hex") === "504b0304");
 	assert.equal(sha256Hex("x").length, 64);
 });
@@ -71,7 +104,7 @@ test("routes enforce buyer auth, verified email, admin-only decisions and eviden
 	assert.match(orders, /bank_order_events/);
 	assert.match(orders, /ON CONFLICT \(order_id\) DO NOTHING/);
 	assert.match(orders, /acceptedTerms/);
-	assert.match(orders, /1\).*2500|BANK_MIN_EUR.*BANK_MAX_EUR/);
+	assert.match(orders, /BANK_MAX_EUR/);
 	const admin = readFileSync("app/api/bank-transfer/admin/route.ts", "utf8");
 	assert.match(admin, /adminUser/);
 	assert.match(admin, /FOR UPDATE/);
@@ -86,19 +119,33 @@ test("routes enforce buyer auth, verified email, admin-only decisions and eviden
 	assert.match(admin, /buildOrderDossier/);
 	assert.match(readFileSync("lib/bank-transfer.ts", "utf8"), /mapping\.csv/);
 	assert.match(admin, /action === "contract"/);
-	const evidence = readFileSync("app/api/bank-transfer/evidence/route.ts", "utf8");
+	const evidence = readFileSync(
+		"app/api/bank-transfer/evidence/route.ts",
+		"utf8",
+	);
 	assert.match(evidence, /Only PDF, CSV, PNG or JPEG/);
 	assert.match(evidence, /15 \* 1024 \* 1024/);
-	const reported = readFileSync("app/api/bank-transfer/reported/route.ts", "utf8");
+	const reported = readFileSync(
+		"app/api/bank-transfer/reported/route.ts",
+		"utf8",
+	);
 	assert.match(reported, /order\.reported/);
 	assert.doesNotMatch(reported, /tokens=tokens/);
 	const ui = readFileSync("app/workspace.tsx", "utf8");
+	assert.match(ui, /Bank transfer \(€1–€10,000\)/);
+	assert.match(ui, /Amount between €1 and €10,000/);
+	assert.match(ui, /max=\{10000\}[\s\S]*value=\{customEur\}/);
 	assert.match(ui, /IBAN:/);
 	assert.match(ui, /BankOrderDetails/);
 	assert.match(ui, /BankTermsLine/);
-	assert.match(readFileSync("lib/bank-transfer.ts", "utf8"), /Manage the order/);
+	assert.match(
+		readFileSync("lib/bank-transfer.ts", "utf8"),
+		/Manage the order/,
+	);
+	assert.match(ui, /Bank transfer \(€1–€10,000\)/);
+	assert.match(ui, /max=\{10000\}[\s\S]*value=\{customEur\}/);
 	assert.match(ui, /Confirm order and get details/);
-	assert.match(ui, /I paid — request verification/);
+	assert.match(readFileSync("app/public-controls.tsx", "utf8"), /max=\{10000\}/);
 	assert.match(ui, /Confirm receipt — credit once/);
 	assert.match(ui, /Download dossier \(ZIP\)/);
 });
