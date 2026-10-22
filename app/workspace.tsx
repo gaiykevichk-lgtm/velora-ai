@@ -1694,7 +1694,7 @@ export function Workspace() {
 						</div>
 						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
 							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-								Bank transfer (€1–€10,000)
+								Bank transfer (€1–€2,500)
 							</div>
 							<div className="mt-2 flex items-baseline justify-between gap-3">
 								<span className="text-2xl font-black text-white">
@@ -1708,18 +1708,18 @@ export function Workspace() {
 								className="mt-3 block text-xs text-[#b8ac90]"
 								htmlFor="bank-eur"
 							>
-								Amount between €1 and €10,000, step €1
+								Amount between €1 and €2,500, step €1
 							</label>
 							<input
 								id="bank-eur"
 								type="number"
 								min={1}
-								max={10000}
+								max={2500}
 								step={1}
 								value={bankEur}
 								onChange={(e) =>
 									setBankEur(
-										Math.max(1, Math.min(10000, Number(e.target.value) || 1)),
+										Math.max(1, Math.min(2500, Number(e.target.value) || 1)),
 									)
 								}
 								className="mt-2 w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"

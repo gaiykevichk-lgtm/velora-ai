@@ -36,9 +36,9 @@ const company = {
 
 test("bank amount boundaries and server-side token math", () => {
 	assert.equal(BANK_MIN_EUR, 1);
-	assert.equal(BANK_MAX_EUR, 10000);
+	assert.equal(BANK_MAX_EUR, 2500);
 	assert.equal(amountToTokens(1), 100);
-	assert.equal(amountToTokens(10000), 1000000);
+	assert.equal(amountToTokens(2500), 250000);
 });
 
 test("buyer profiles require full invoice identity", () => {
@@ -132,8 +132,8 @@ test("routes enforce buyer auth, verified email, admin-only decisions and eviden
 	assert.match(reported, /order\.reported/);
 	assert.doesNotMatch(reported, /tokens=tokens/);
 	const ui = readFileSync("app/workspace.tsx", "utf8");
-	assert.match(ui, /Bank transfer \(€1–€10,000\)/);
-	assert.match(ui, /Amount between €1 and €10,000/);
+	assert.match(ui, /Bank transfer \(€1–€2,500\)/);
+	assert.match(ui, /Amount between €1 and €2,500/);
 	assert.match(ui, /max=\{10000\}[\s\S]*value=\{customEur\}/);
 	assert.match(ui, /IBAN:/);
 	assert.match(ui, /BankOrderDetails/);
@@ -142,10 +142,13 @@ test("routes enforce buyer auth, verified email, admin-only decisions and eviden
 		readFileSync("lib/bank-transfer.ts", "utf8"),
 		/Manage the order/,
 	);
-	assert.match(ui, /Bank transfer \(€1–€10,000\)/);
+	assert.match(ui, /Bank transfer \(€1–€2,500\)/);
 	assert.match(ui, /max=\{10000\}[\s\S]*value=\{customEur\}/);
 	assert.match(ui, /Confirm order and get details/);
-	assert.match(readFileSync("app/public-controls.tsx", "utf8"), /max=\{10000\}/);
+	assert.match(
+		readFileSync("app/public-controls.tsx", "utf8"),
+		/max=\{10000\}/,
+	);
 	assert.match(ui, /Confirm receipt — credit once/);
 	assert.match(ui, /Download dossier \(ZIP\)/);
 });

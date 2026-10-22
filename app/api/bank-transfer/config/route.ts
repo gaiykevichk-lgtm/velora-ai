@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest) {
 					enabled,
 					configured,
 					minEur: 1,
-					maxEur: 10000,
+					maxEur: 2500,
 					tokensPerEur: 100,
 					validityMonths: cfg.validityMonths,
 					creditDays: cfg.creditDays,
@@ -49,7 +49,7 @@ export async function GET(_req: NextRequest) {
 					enabled,
 					configured,
 					minEur: 1,
-					maxEur: 10000,
+					maxEur: 2500,
 					tokensPerEur: 100,
 					validityMonths,
 					creditDays:
