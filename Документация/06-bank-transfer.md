@@ -15,6 +15,12 @@ BANK_TERMS_VERSION and BANK_TERMS_TEXT freeze the accepted copy per order.
 BANK_TOKEN_VALIDITY_MONTHS and BANK_CREDIT_DAYS_AFTER_RECEIPT are shown everywhere from one source.
 Evidence upload dir must be writable by the app.
 
+## 2026-10-22 checkpoint
+- Confirmed the €1–€2,500 control in the buyer UI and shared server-side constant; cap is 2,500, not 10,000.
+- Verification rerun: 32 automated tests pass and TypeScript check passes.
+- Live `.env` has no database URL, SMTP settings, bank-transfer enable flag, seller bank details, or finalized terms. Keep real bank transfer disabled; do not test with fake details or enable payments until the owner supplies approved production configuration and the external PostgreSQL/email services are provisioned.
+- Remaining: provision/configure PostgreSQL, SMTP delivery, approved merchant identity/bank details and final terms; then run migrations, verify buyer and admin flows against the configured service, and perform an end-to-end payment reconciliation test. Public production payments have not been tested.
+
 ## Data model
 bank_buyers: latest reusable profile per user.
 bank_orders: one snapshot per order, immutable buyer/seller payload, public order number, kind/person/company payload, terms version/text, confirmation timestamp, status history via bank_order_events.
