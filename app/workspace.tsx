@@ -81,15 +81,22 @@ function CopyInline({ text }: { text: string }) {
 	);
 }
 function CopyText({ text }: { text: string }) {
+	const [copied, setCopied] = useState(false);
 	return (
 		<button
 			type="button"
 			className="ml-2 underline"
-			onClick={() => {
-				void navigator.clipboard?.writeText(text);
+			onClick={async () => {
+				try {
+					await navigator.clipboard.writeText(text);
+					setCopied(true);
+					window.setTimeout(() => setCopied(false), 1500);
+				} catch {
+					setCopied(false);
+				}
 			}}
 		>
-			Copy
+			{copied ? "Copied" : "Copy"}
 		</button>
 	);
 }
@@ -142,14 +149,21 @@ function BankOrderDetails({ id }: { id: string }) {
 				{s.country ? `, ${s.country}` : ""}
 			</div>
 			<div className="mt-1">
+				Account holder: {s.legalName ?? "—"}
+			</div>
+			<div className="mt-1">
 				IBAN: <CopyInline text={String(s.iban ?? "")} />
 			</div>
 			<div className="mt-1">
-				BIC: <CopyInline text={String(s.bic ?? "")} /> · Bank: {s.bank ?? "—"}
+				SWIFT / BIC: <CopyInline text={String(s.bic ?? "")} /> · Bank: {s.bank ?? "—"}
+			</div>
+			<div className="mt-1">Bank address: {s.address ?? "—"}</div>
+			<div className="mt-1">Currency: EUR</div>
+			<div className="mt-1">
+				Amount: €{Number(o.eur_amount).toLocaleString("en-US")}
 			</div>
 			<div className="mt-1">
-				Amount: €{Number(o.eur_amount).toLocaleString("en-US")} · Reference:{" "}
-				<CopyInline text={String(o.public_number)} />
+				Payment reference: <CopyInline text={`Payment under invoice ${String(o.invoice_number ?? o.public_number)}`} />
 			</div>
 			<div className="mt-1">
 				Buyer:{" "}
@@ -535,6 +549,7 @@ export function Workspace() {
 	const [bankOrder, setBankOrder] = useState<null | {
 		id: string;
 		publicNumber: string;
+		invoiceNumber: string;
 		eur: number;
 		tokens: number;
 		status: string;
@@ -670,6 +685,7 @@ export function Workspace() {
 				order: {
 					id: string;
 					publicNumber: string;
+					invoiceNumber: string;
 					eur: number;
 					tokens: number;
 					status: string;
@@ -1808,15 +1824,13 @@ export function Workspace() {
 							{bankOrder ? (
 								<div className="mt-3 rounded-lg border border-[#1f8a3b] bg-[#0f2e1a] p-3 text-xs text-[#7dffa8]">
 									<div className="font-bold">
-										Order {bankOrder.publicNumber}: €{bankOrder.eur} ={" "}
+										Order {bankOrder.invoiceNumber}: €{bankOrder.eur} ={" "}
 										{bankOrder.tokens.toLocaleString("en-US")} tokens ·{" "}
 										{bankOrder.status}
 									</div>
 									<BankDetailsLink id={bankOrder.id} />
 									<p className="mt-2">
-										Transfer the exact amount and include the order number in
-										the payment reference. Pay from the buyer account shown
-										above. Tokens are credited after receipt is confirmed.
+										Transfer the displayed EUR amount and copy the payment reference exactly. Pay from the buyer account shown above. Tokens are credited only after the administrator confirms receipt.
 									</p>
 									{[
 										"awaiting_payment",

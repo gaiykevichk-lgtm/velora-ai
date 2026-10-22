@@ -60,14 +60,16 @@ test("order mail carries reference, exact amount and credit window", () => {
 			publicNumber: "VEL-2026-000123",
 			eur: 20,
 			tokens: 2000,
+			invoiceNumber: "INV-2026-000123",
 			seller: { legalName: "Seller", iban: "FR1", bic: "BIC", bank: "Bank" },
+			buyer: {},
 			buyer: {},
 			creditDays: 2,
 		},
 		"https://veloraai.pro",
 	);
 	assert.ok(
-		body.includes("VEL-2026-000123") &&
+		body.includes("Payment reference: Payment under invoice INV-2026-000123") &&
 			body.includes("20 EUR") &&
 			body.includes("2,000") &&
 			body.includes("2 business days"),

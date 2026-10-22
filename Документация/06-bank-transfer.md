@@ -17,9 +17,9 @@ Evidence upload dir must be writable by the app.
 
 ## 2026-10-22 checkpoint
 - Confirmed the €1–€2,500 control in the buyer UI and shared server-side constant; cap is 2,500, not 10,000.
-- Verification rerun: 32 automated tests pass and TypeScript check passes.
-- Live `.env` has no database URL, SMTP settings, bank-transfer enable flag, seller bank details, or finalized terms. Keep real bank transfer disabled; do not test with fake details or enable payments until the owner supplies approved production configuration and the external PostgreSQL/email services are provisioned.
-- Remaining: provision/configure PostgreSQL, SMTP delivery, approved merchant identity/bank details and final terms; then run migrations, verify buyer and admin flows against the configured service, and perform an end-to-end payment reconciliation test. Public production payments have not been tested.
+- Updated bank-transfer instructions to show account holder, IBAN, SWIFT/BIC, bank address, currency, exact order amount, and copyable payment reference in the format `Payment under invoice [invoice number]`. The number comes from the persisted invoice document; buyer instructions, email, and order confirmation PDF use it. Tokens remain credited only after an administrator confirms receipt.
+- Configured the supplied merchant display and bank details in the ignored local `.env` and documented the same non-secret configuration in `.env.example`. The database URL, SMTP and final terms are still absent; bank transfer remains disabled. Do not enable production ordering until PostgreSQL and required legal/operational settings are supplied.
+- Verification: 32 tests, TypeScript and production build pass. The live buyer/admin payment flow cannot be exercised without persistent PostgreSQL and authenticated accounts; public production payments have not been tested.
 
 ## Data model
 bank_buyers: latest reusable profile per user.

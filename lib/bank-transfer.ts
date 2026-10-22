@@ -152,6 +152,7 @@ export function buyerComplete(b: ReturnType<typeof buyerProfileSchema>) {
 export function mailText(
 	order: {
 		publicNumber: string;
+		invoiceNumber?: string;
 		eur: number;
 		tokens: number;
 		seller: Record<string, string>;
@@ -163,7 +164,8 @@ export function mailText(
 		`${order.seller.legalName} accepted order ${order.publicNumber}.`,
 		`Prepaid package of ${order.tokens.toLocaleString("en-US")} tokens for Velora AI services, ${order.eur} EUR.`,
 		`Recipient: ${order.seller.legalName}, IBAN ${order.seller.iban}, BIC ${order.seller.bic}, ${order.seller.bank}.`,
-		`Payment reference: ${order.publicNumber}. Transfer the exact amount from the buyer account.`,
+		`Bank address: ${order.seller.address ?? ""}. Currency: EUR. Amount: ${order.eur.toFixed(2)} EUR.`,
+		`Payment reference: Payment under invoice ${order.invoiceNumber ?? order.publicNumber}. Transfer the exact amount from the buyer account.`,
 		`Tokens are usage units of the service; this is not an order for specific videos or images. Tokens are credited after receipt, within ${order.creditDays} business days of arrival.`,
 		`Manage the order: ${origin}/studio?topup=open&bankOrder=${order.publicNumber}`,
 	].join("\n");

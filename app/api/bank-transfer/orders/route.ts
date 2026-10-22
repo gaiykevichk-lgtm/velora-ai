@@ -54,7 +54,8 @@ function docPdf(kind: string, docNumber: string, order: any, cfg: ReturnType<typ
 		`Order: ${order.public_number}, confirmed ${new Date(order.confirmed_at).toISOString()}`,
 		`Prepaid package of ${Number(order.tokens).toLocaleString("en-US")} tokens for Velora AI services, ${order.eur_amount} EUR.`,
 		`Recipient: ${cfg.seller.legalName}, IBAN ${cfg.seller.iban}, BIC ${cfg.seller.bic}, ${cfg.seller.bank}.`,
-		`Payment reference: ${order.public_number}.`,
+		`Payment reference: Payment under invoice ${order.invoice_number ?? order.public_number}.`,
+		`Currency: EUR. Amount: ${Number(order.eur_amount).toFixed(2)} EUR.`,
 		`Validity: ${cfg.validityMonths} months from crediting. Credit after receipt within ${cfg.creditDays} business days.`,
 		`Terms ${order.terms_version}. Tokens are service usage units, not money and not transferable.`,
 	]);
@@ -68,6 +69,7 @@ async function sendOrderMail(order: any, origin: string) {
 	const body = mailText(
 		{
 			publicNumber: order.public_number,
+			invoiceNumber: order.invoice_number,
 			eur: Number(order.eur_amount),
 			tokens: Number(order.tokens),
 			seller: order.seller,
@@ -155,6 +157,7 @@ export async function POST(req: NextRequest) {
 				for (const [kind, prefix] of [["confirmation", "OC"], ["invoice", "INV"]] as const) {
 					const docNumber = `${prefix}-${year}-${String(seq.rows[0].last_no).padStart(6, "0")}`;
 					await client.query("INSERT INTO bank_order_documents (id,order_id,kind,doc_number,payload) VALUES ($1,$2,$3,$4,$5)", [randomUUID(), id, kind, docNumber, JSON.stringify({ tokens, eur: parsed.data.eurAmount })]);
+					if (kind === "invoice") order.invoice_number = docNumber;
 				}
 				const rows = await client.query("SELECT * FROM bank_orders WHERE id=$1", [id]);
 				order = rows.rows[0];
@@ -163,6 +166,8 @@ export async function POST(req: NextRequest) {
 			await client.query("COMMIT");
 		} catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
 		const origin = new URL(process.env.APP_BASE_URL!).origin;
+		const invoiceRow = (await pool.query("SELECT doc_number FROM bank_order_documents WHERE order_id=$1 AND kind='invoice' ORDER BY created_at LIMIT 1", [order.id])).rows[0];
+		order.invoice_number = invoiceRow?.doc_number ?? order.public_number;
 		const mail = await sendOrderMail(order, origin);
 		const pdf = docPdf("Order confirmation", `${order.public_number}`, order, cfg);
 		const dir = join(cfg.evidenceDir, order.id);
@@ -173,7 +178,8 @@ export async function POST(req: NextRequest) {
 			order: {
 				id: order.id, publicNumber: order.public_number, eur: Number(order.eur_amount), tokens: Number(order.tokens),
 				status: order.status, buyer: order.buyer,
-				seller: { legalName: cfg.seller.legalName, iban: cfg.seller.iban, bic: cfg.seller.bic, bank: cfg.seller.bank },
+				seller: { legalName: cfg.seller.legalName, iban: cfg.seller.iban, bic: cfg.seller.bic, bank: cfg.seller.bank, address: cfg.seller.address, country: cfg.seller.country },
+				invoiceNumber: order.invoice_number,
 				mailSent: mail.sent,
 			},
 		}, { status: 201 });
@@ -191,7 +197,7 @@ export async function GET(req: NextRequest) {
 		const mine = "SELECT id,public_number,eur_amount,tokens,status,confirmed_at,buyer FROM bank_orders WHERE user_id=$1 ORDER BY confirmed_at DESC LIMIT 50";
 		if (!admin) {
 			if (id) {
-				const { rows } = await pool.query("SELECT id,public_number,eur_amount,tokens,status,confirmed_at,buyer,seller,description,terms_version FROM bank_orders WHERE id=$1 AND user_id=$2", [id, account.id]);
+				const { rows } = await pool.query("SELECT o.id,o.public_number,o.eur_amount,o.tokens,o.status,o.confirmed_at,o.buyer,o.seller,o.description,o.terms_version,(SELECT doc_number FROM bank_order_documents d WHERE d.order_id=o.id AND d.kind='invoice' ORDER BY d.created_at LIMIT 1) AS invoice_number FROM bank_orders o WHERE o.id=$1 AND o.user_id=$2", [id, account.id]);
 				if (!rows[0]) return NextResponse.json({ error: "Order not found." }, { status: 404 });
 				return NextResponse.json({ order: rows[0] });
 			}
