@@ -140,7 +140,7 @@ export async function spendTokens(
 	if (!rows.length) {
 		// Legacy balance without lot tracking: keep the original atomic update.
 		const deducted = await pool.query(
-			"UPDATE users SET tokens=tokens-$1 WHERE id=$2 AND tokens >= $1 RETURNING tokens",
+			"UPDATE users SET tokens=tokens-$1::int WHERE id=$2 AND tokens >= $1::int RETURNING tokens",
 			[cost, userId],
 		);
 		return {
@@ -158,7 +158,7 @@ export async function spendTokens(
 	}
 	for (const item of plan.consume)
 		await pool.query(
-			"UPDATE token_lots SET remaining=remaining-$2 WHERE id=$1",
+			"UPDATE token_lots SET remaining=remaining-$2::int WHERE id=$1",
 			[item.id, item.take],
 		);
 	const synced = await syncTokenBalance(pool, userId);
