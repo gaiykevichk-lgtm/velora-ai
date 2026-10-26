@@ -1,7 +1,7 @@
 # Bank transfer (IBAN) — working notes, not legal text
 
 ## Scope in this version
-- Buyer flow: amount €1–€2,500, buyer type person/company, confirm order, receive IBAN instructions.
+- Buyer flow: amount €2–€2,500 (merchant minimum €2), buyer type person/company, confirm order, receive IBAN instructions.
 - Admin flow: mark paid, mark reviewing, mark cancelled, mark reported, refund bookkeeping, upload signed contract.
 - Buyer receipt email exists but may be log-only when SMTP is absent; admin sees delivery state.
 - PDF downloads are plain-text PDF documents generated without dependencies; bank files can be attached/uploaded and exported in the dossier.
@@ -16,7 +16,7 @@ BANK_TOKEN_VALIDITY_MONTHS and BANK_CREDIT_DAYS_AFTER_RECEIPT are shown everywhe
 Evidence upload dir must be writable by the app.
 
 ## 2026-10-22 checkpoint
-- Confirmed the €1–€2,500 control in the buyer UI and shared server-side constant; cap is 2,500, not 10,000.
+- Confirmed the €2–€2,500 control in the buyer UI and shared server-side constant; cap is 2,500, not 10,000.
 - Updated bank-transfer instructions to show account holder, IBAN, SWIFT/BIC, bank address, currency, exact order amount, and copyable payment reference in the format `Payment under invoice [invoice number]`. The number comes from the persisted invoice document; buyer instructions, email, and order confirmation PDF use it. Tokens remain credited only after an administrator confirms receipt.
 - Configured the supplied merchant display and bank details in the ignored local `.env` and documented the same non-secret configuration in `.env.example`. The database URL, SMTP and final terms are still absent; bank transfer remains disabled. Do not enable production ordering until PostgreSQL and required legal/operational settings are supplied.
 - Verification: 32 tests, TypeScript and production build pass. The live buyer/admin payment flow cannot be exercised without persistent PostgreSQL and authenticated accounts; public production payments have not been tested.

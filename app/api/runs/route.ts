@@ -10,6 +10,7 @@ import {
 	generateText,
 	submitVideo,
 } from "@/lib/provider";
+import { spendTokens, syncTokenBalance } from "@/lib/tokens";
 const schema = z.object({
 	workspaceId: z.string().uuid(),
 	mode: z.enum(["text", "image", "video"]),
@@ -103,11 +104,10 @@ export async function POST(req: NextRequest) {
 		const tokenCost = TOKEN_RATES[mode] || 10;
 		const pool = await dbAsync();
 
-		const balanceCheck = await pool.query<{ tokens: number }>(
-			"SELECT tokens FROM users WHERE id=$1",
-			[account.id],
-		);
-		const currentTokens = balanceCheck.rows[0]?.tokens ?? 0;
+		// Expired purchase lots are removed here, so the published 12-month
+		// validity is enforced before a new run is charged.
+		const balance = await syncTokenBalance(pool, account.id);
+		const currentTokens = balance.tokens;
 		if (currentTokens < tokenCost) {
 			return NextResponse.json(
 				{
@@ -157,8 +157,16 @@ export async function POST(req: NextRequest) {
 			throw e;
 		}
 
-		const deducted = await pool.query("UPDATE users SET tokens=tokens-$1 WHERE id=$2 AND tokens >= $1 RETURNING tokens", [tokenCost, account.id]);
-        if (!deducted.rowCount) return NextResponse.json({error: "Balance changed during generation. Please try again.", code: "INSUFFICIENT_TOKENS"}, {status: 402});
+		const charge = await spendTokens(pool, account.id, tokenCost);
+		if (!charge.ok)
+			return NextResponse.json(
+				{
+					error:
+						"Balance changed during generation. Please try again.",
+					code: "INSUFFICIENT_TOKENS",
+				},
+				{ status: 402 },
+			);
 		const txId = randomUUID();
 		await pool.query(
 			"INSERT INTO token_transactions (id, user_id, amount, reason) VALUES ($1, $2, $3, $4)",
@@ -185,11 +193,6 @@ export async function POST(req: NextRequest) {
 			],
 		);
 
-		const updatedTokensRes = await pool.query<{ tokens: number }>(
-			"SELECT tokens FROM users WHERE id=$1",
-			[account.id],
-		);
-
 		return NextResponse.json(
 			{
 				run: {
@@ -201,7 +204,7 @@ export async function POST(req: NextRequest) {
 					error: null,
 					tokensSpent: tokenCost,
 				},
-				tokens: updatedTokensRes.rows[0]?.tokens ?? 0,
+				tokens: charge.tokens,
 			},
 			{ status: 201 },
 		);

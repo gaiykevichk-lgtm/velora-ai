@@ -4,8 +4,19 @@ import { join } from "node:path";
 
 export class BankConfigError extends Error {}
 
-export const BANK_MIN_EUR = 1;
+export const BANK_MIN_EUR = 2;
 export const BANK_MAX_EUR = 2500;
+
+// Final purchase terms frozen into every bank-transfer order. Kept in code so a
+// missing BANK_TERMS_TEXT variable can no longer ship a draft placeholder.
+export const FINAL_BANK_TERMS_TEXT =
+	"Prepaid Velora AI tokens: EUR 100 per EUR 1 paid (EUR 20 = 2,000 tokens, EUR 100 = 10,000 tokens). " +
+	"The minimum order is EUR 2 and the maximum is EUR 2,500. Tokens are credited within 2 business days after the transfer is received " +
+	"and the buyer is identified by the payment reference. Credited tokens are valid for 12 months from the credit date. " +
+	"Tokens are platform usage units: they are not money, cannot be transferred or withdrawn, and do not create a subscription. " +
+	"Mandatory French and EU consumer rights, including the statutory 14-day withdrawal right for distance purchases, are not limited by these terms. " +
+	"Unused tokens can be refunded to the original paying account within 14 days of credit; after that period unused tokens remain usable for the full validity period. " +
+	"The seller is Omnix21, 47 rue Vivienne, 75002 Paris, France (107 643 348 R.C.S. Paris).";
 
 export function bankConfig() {
 	const seller = {
@@ -22,7 +33,7 @@ export function bankConfig() {
 		process.env.BANK_TERMS_VERSION?.trim() || "2026-10-26-v1";
 	const termsText =
 		process.env.BANK_TERMS_TEXT?.trim() ||
-		"DRAFT — replace BANK_TERMS_VERSION and BANK_TERMS_TEXT before commercial launch.";
+		FINAL_BANK_TERMS_TEXT;
 	const validityMonths = Number(process.env.BANK_TOKEN_VALIDITY_MONTHS ?? "12");
 	const creditDays = Number(process.env.BANK_CREDIT_DAYS_AFTER_RECEIPT ?? "2");
 	if (

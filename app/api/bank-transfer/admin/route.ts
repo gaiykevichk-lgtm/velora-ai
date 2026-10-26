@@ -8,6 +8,7 @@ import { dbAsync } from "@/lib/db";
 import { failure } from "@/lib/api";
 import { audit, bankConfig, nextBankStatus, buildOrderDossier } from "@/lib/bank-transfer";
 import { sendPlainMail } from "@/lib/verify-email";
+import { grantTokens } from "@/lib/tokens";
 
 export const runtime = "nodejs";
 const paymentSchema = z.object({
@@ -115,8 +116,9 @@ export async function POST(req: NextRequest) {
 				const paidCents = Number(paid.rows[0].paid);
 				if (paid.rows[0].nonEur || paidCents < Number(order.eur_amount) * 100)
 					throw Object.assign(new Error("Full EUR receipt is required before crediting."), { status: 409 });
-				const updated = await client.query("UPDATE users SET tokens=tokens+$1 WHERE id=$2", [Number(order.tokens), order.user_id]);
-				if (updated.rowCount !== 1) throw new Error("Buyer account is missing.");
+				const account = await client.query("SELECT id FROM users WHERE id=$1", [order.user_id]);
+				if (!account.rowCount) throw new Error("Buyer account is missing.");
+				await grantTokens(client, order.user_id, Number(order.tokens), `Bank transfer ${order.public_number}`);
 				await client.query("INSERT INTO token_transactions (id,user_id,amount,reason) VALUES ($1,$2,$3,$4)", [randomUUID(), order.user_id, Number(order.tokens), `Bank transfer ${order.public_number}`]);
 				await client.query("UPDATE bank_orders SET status='credited',updated_at=now() WHERE id=$1", [parsed.data.orderId]);
 				const year = new Date().getUTCFullYear();

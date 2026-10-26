@@ -56,8 +56,9 @@ export function TokenEstimator() {
 				Preview your <span>token amount</span>
 			</h2>
 			<p className="v-intro">
-				Select an amount to see how many tokens it corresponds to, then place an
-				invoice order from your account. No online payment is taken here.
+				Select an amount to see how many tokens it corresponds to. Tokens are
+				credited after your payment is confirmed: by card checkout or by bank
+				transfer order.
 			</p>
 			<div className="v-estimator-card">
 				<div className="v-estimator-values">
@@ -73,26 +74,29 @@ export function TokenEstimator() {
 					</div>
 				</div>
 				<label htmlFor="token-estimator-range">
-					Choose an amount between €1 and €10,000
+					Choose an amount between €2 and €2,500
 				</label>
 				<input
 					id="token-estimator-range"
 					type="range"
-					min={1}
-					max={10000}
+					min={2}
+					max={2500}
 					step={1}
 					value={eur}
-					onChange={(e) => setEur(Number(e.target.value))}
+					onChange={(e) => {
+						const next = Number(e.target.value) || 2;
+						setEur(Math.max(2, Math.min(2500, next)));
+					}}
 				/>
 				<p className="v-small">
 					Rate: {TOKENS_PER_EUR} tokens per €1 — the same conversion as the
-					agreed packages (€20 = 2,000 tokens, €100 = 10,000 tokens). To buy
-					tokens, sign in and place an invoice order: {COMPANY.name} issues the
-					invoice and an administrator credits the tokens after payment. Online
-					card checkout is not connected.
+					packages (€20 = 2,000 tokens, €100 = 10,000 tokens). Tokens are valid
+					for 12 months after they are credited. Buy in your account: {COMPANY.name}
+					{" "}confirms card payments through Infini and credits bank transfers
+					after the money is received.
 				</p>
 				<a className="v-button" href="/studio?mode=video&topup=open">
-					Order {tokens.toLocaleString("en-US")} tokens by invoice ↗
+					Buy {tokens.toLocaleString("en-US")} tokens ↗
 				</a>
 			</div>
 		</section>

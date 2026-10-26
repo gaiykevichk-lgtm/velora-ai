@@ -16,7 +16,6 @@ import {
 	X,
 } from "lucide-react";
 import { TOKEN_PACKAGES } from "@/lib/commerce";
-import { COMPANY, TOKENS_PER_EUR } from "@/lib/company";
 import { presets } from "@/lib/presets";
 import { VeloraLogo } from "./logo";
 
@@ -41,7 +40,7 @@ function currency(n: number) {
 }
 function BankTermsLine() {
 	const [text, setText] = useState(
-		"Tokens have a limited validity period with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:",
+		"Tokens have a limited validity period with no subscription lock-ins. Choose a package for card checkout, or pay by bank transfer — the same tokens either way:",
 	);
 	useEffect(() => {
 		(async () => {
@@ -50,11 +49,11 @@ function BankTermsLine() {
 				if (!r.ok) return;
 				const j = await r.json();
 				setText(
-					`Tokens are valid for ${Number(j.validityMonths) || 12} months with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:`,
+					`Tokens are valid for ${Number(j.validityMonths) || 12} months with no subscription lock-ins. Choose a package for card checkout, or pay by bank transfer — the same tokens either way:`,
 				);
 			} catch {
 				setText(
-					"Tokens have a limited validity period with no subscription lock-ins. Choose a package for secure Infini checkout, or order separately by invoice:",
+					"Tokens have a limited validity period with no subscription lock-ins. Choose a package for card checkout, or pay by bank transfer — the same tokens either way:",
 				);
 			}
 		})();
@@ -148,14 +147,13 @@ function BankOrderDetails({ id }: { id: string }) {
 				Recipient: {s.legalName ?? "—"} · {s.bank ?? ""}
 				{s.country ? `, ${s.country}` : ""}
 			</div>
-			<div className="mt-1">
-				Account holder: {s.legalName ?? "—"}
-			</div>
+			<div className="mt-1">Account holder: {s.legalName ?? "—"}</div>
 			<div className="mt-1">
 				IBAN: <CopyInline text={String(s.iban ?? "")} />
 			</div>
 			<div className="mt-1">
-				SWIFT / BIC: <CopyInline text={String(s.bic ?? "")} /> · Bank: {s.bank ?? "—"}
+				SWIFT / BIC: <CopyInline text={String(s.bic ?? "")} /> · Bank:{" "}
+				{s.bank ?? "—"}
 			</div>
 			<div className="mt-1">Bank address: {s.address ?? "—"}</div>
 			<div className="mt-1">Currency: EUR</div>
@@ -163,7 +161,10 @@ function BankOrderDetails({ id }: { id: string }) {
 				Amount: €{Number(o.eur_amount).toLocaleString("en-US")}
 			</div>
 			<div className="mt-1">
-				Payment reference: <CopyInline text={`Payment under invoice ${String(o.invoice_number ?? o.public_number)}`} />
+				Payment reference:{" "}
+				<CopyInline
+					text={`Payment under invoice ${String(o.invoice_number ?? o.public_number)}`}
+				/>
 			</div>
 			<div className="mt-1">
 				Buyer:{" "}
@@ -459,21 +460,21 @@ const modes: {
 		key: "text",
 		title: "Chat & Script",
 		cost: 5,
-		subtitle: "Prompt & script generation (legacy rate: 5 tokens)",
+		subtitle: "Prompt & script generation · 5 tokens per run",
 		icon: MessageCircle,
 	},
 	{
 		key: "image",
 		title: "Image Studio",
 		cost: 25,
-		subtitle: "AI image generation (legacy rate: 25 tokens)",
+		subtitle: "AI image generation · 25 tokens per image",
 		icon: ImageIcon,
 	},
 	{
 		key: "video",
 		title: "Video Studio",
 		cost: 100,
-		subtitle: "Automated AI video generation (legacy rate: 100 tokens)",
+		subtitle: "Automated AI video generation · 100 tokens per video",
 		icon: Clapperboard,
 	},
 ];
@@ -522,9 +523,8 @@ export function Workspace() {
 	const [password, setPassword] = useState("");
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [topupSuccess, setTopupSuccess] = useState("");
-	const [customEur, setCustomEur] = useState(20);
-	const [orders, setOrders] = useState<TokenOrder[]>([]);
 	const [isAdmin, setIsAdmin] = useState(false);
+	const [bankConfigured, setBankConfigured] = useState(true);
 	const [onlineEnabled, setOnlineEnabled] = useState(false);
 	const [paymentOrders, setPaymentOrders] = useState<TokenOrder[]>([]);
 	const [checkoutRequest, setCheckoutRequest] = useState<{
@@ -532,7 +532,6 @@ export function Workspace() {
 		requestId: string;
 	} | null>(null);
 	const [orderMsg, setOrderMsg] = useState("");
-	const [adminNote, setAdminNote] = useState("");
 	const [adminBusyId, setAdminBusyId] = useState("");
 	const [bankEur, setBankEur] = useState(20);
 	const [bankKind, setBankKind] = useState<"person" | "company">("person");
@@ -613,28 +612,19 @@ export function Workspace() {
 		}
 	}, []);
 
-	const refreshOrders = useCallback(async () => {
-		try {
-			const data = await request<{ orders: TokenOrder[]; isAdmin: boolean }>(
-				"/api/orders",
-			);
-			setOrders(data.orders);
-			setIsAdmin(data.isAdmin);
-		} catch {
-			/* Guest mode or unavailable */
-		}
-	}, []);
-
-	useEffect(() => {
-		if (topupOpen && account) void refreshOrders();
-	}, [topupOpen, account, refreshOrders]);
 	const refreshBank = useCallback(async () => {
 		try {
-			const data = await request<{ orders: any[]; profile: any }>(
-				`/api/bank-transfer/orders`,
-			);
+			const data = await request<{
+				orders: any[];
+				profile: any;
+				isAdmin?: boolean;
+				configured?: boolean;
+				reason?: string;
+			}>(`/api/bank-transfer/orders`);
 			setBankOrders(data.orders ?? []);
 			setBankProfile(data.profile ?? null);
+			setIsAdmin(Boolean(data.isAdmin));
+			setBankConfigured(data.configured !== false);
 		} catch (e) {
 			setError((e as Error).message);
 		}
@@ -801,120 +791,6 @@ export function Workspace() {
 			setBusy(false);
 		}
 	}
-
-	async function placeOrder(eurAmount: number) {
-		if (!account) {
-			setAuthOpen(true);
-			return;
-		}
-		setBusy(true);
-		setError("");
-		setOrderMsg("");
-		try {
-			const res = await request<{ order: TokenOrder }>("/api/orders", {
-				method: "POST",
-				body: JSON.stringify({ eurAmount }),
-			});
-			setOrderMsg(
-				`Order placed: €${res.order.eur_amount} = ${res.order.tokens.toLocaleString("en-US")} tokens. Status: pending invoice.`,
-			);
-			void refreshOrders();
-		} catch (e) {
-			setError((e as Error).message);
-		} finally {
-			setBusy(false);
-		}
-	}
-
-	async function decideOrder(
-		id: string,
-		action: "invoiced" | "credited" | "cancelled",
-	) {
-		setAdminBusyId(id);
-		setError("");
-		try {
-			await request("/api/orders", {
-				method: "PATCH",
-				body: JSON.stringify({ id, action, adminNote }),
-			});
-			void refreshOrders();
-			void refreshTokens();
-		} catch (e) {
-			setError((e as Error).message);
-		} finally {
-			setAdminBusyId("");
-		}
-	}
-
-	useEffect(() => {
-		request<{ user: Account | null }>("/api/auth")
-			.then((data) => {
-				setAccount(data.user);
-				if (data.user) {
-					if (typeof data.user.tokens === "number") {
-						setTokens(data.user.tokens);
-					} else {
-						void refreshTokens();
-					}
-					void loadSpaces();
-				}
-			})
-			.catch(() => {
-				/* Guest mode */
-			});
-	}, [loadSpaces, refreshTokens]);
-
-	useEffect(() => {
-		if (searchParams.get("auth") === "open" && !account) {
-			setAuthOpen(true);
-		}
-		if (searchParams.get("verified") === "1" && !account) {
-			setAuthOpen(true);
-			setAuthMode("login");
-			setVerifyNotice(
-				"Email confirmed. Sign in with your password to continue.",
-			);
-		}
-	}, [searchParams, account]);
-
-	useEffect(() => {
-		if (!activeId) {
-			setRuns([]);
-			return;
-		}
-		request<{ runs: Run[] }>(
-			`/api/runs?workspaceId=${encodeURIComponent(activeId)}`,
-		)
-			.then((data) => setRuns(data.runs))
-			.catch((e) => setError(e.message));
-	}, [activeId]);
-
-	useEffect(() => {
-		const pending = runs.filter(
-			(run) => run.mode === "video" && run.status === "pending",
-		);
-		if (!pending.length) return;
-		const timer = window.setInterval(() => {
-			for (const run of pending)
-				request<{ status: string; result: string | null }>(
-					`/api/video-status?id=${run.id}`,
-				)
-					.then((data) => {
-						setRuns((prev) =>
-							prev.map((item) =>
-								item.id === run.id
-									? { ...item, status: data.status, result: data.result }
-									: item,
-							),
-						);
-						if (data.status === "completed") {
-							void refreshTokens();
-						}
-					})
-					.catch((e) => setError(e.message));
-		}, 10000);
-		return () => window.clearInterval(timer);
-	}, [runs, refreshTokens]);
 
 	function chooseMode(value: Mode) {
 		setMode(value);
@@ -1452,9 +1328,9 @@ export function Workspace() {
 						</form>
 
 						<p className="text-xs text-[#b8ac90] p-4">
-							Local preview: displayed operation rates are legacy rates, not a
-							verified Vidorya tariff. Email verification and commercial
-							checkout are pending integration.
+							Costs are charged per completed run: 5 tokens for text, 25 per
+							image, 100 per video. Generated files stay in your account. A
+							confirmed email address is required to generate.
 						</p>
 						{/* Prompt starters */}
 						<div className="mb-10">
@@ -1653,8 +1529,8 @@ export function Workspace() {
 
 						{!onlineEnabled && (
 							<p className="text-sm text-[#ffe4a6]">
-								Online payments are not enabled. No charge has been made.
-								Invoice orders remain available below.
+								Card payments are temporarily unavailable. No charge has been
+								made — use the bank transfer order below.
 							</p>
 						)}
 						<div className="mt-4 text-sm text-[#b8ac90]">
@@ -1710,7 +1586,7 @@ export function Workspace() {
 						</div>
 						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
 							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-								Bank transfer (€1–€2,500)
+								Bank transfer (€2–€2,500)
 							</div>
 							<div className="mt-2 flex items-baseline justify-between gap-3">
 								<span className="text-2xl font-black text-white">
@@ -1724,18 +1600,18 @@ export function Workspace() {
 								className="mt-3 block text-xs text-[#b8ac90]"
 								htmlFor="bank-eur"
 							>
-								Amount between €1 and €2,500, step €1
+								Amount between €2 and €2,500, step €1
 							</label>
 							<input
 								id="bank-eur"
 								type="number"
-								min={1}
+								min={2}
 								max={2500}
 								step={1}
 								value={bankEur}
 								onChange={(e) =>
 									setBankEur(
-										Math.max(1, Math.min(2500, Number(e.target.value) || 1)),
+										Math.max(2, Math.min(2500, Number(e.target.value) || 2)),
 									)
 								}
 								className="mt-2 w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
@@ -1813,9 +1689,15 @@ export function Workspace() {
 									</Link>
 								</span>
 							</label>
+							{!bankConfigured && (
+								<p className="mt-3 rounded-lg border border-[#3a2a1a] bg-[#1f140b] p-3 text-xs text-[#ffe4a6]">
+									Bank transfer orders are not open yet. No payment has been
+									requested — contact support if you need tokens now.
+								</p>
+							)}
 							<button
 								type="button"
-								disabled={busy || !bankAccepted}
+								disabled={busy || !bankAccepted || !bankConfigured}
 								onClick={() => void createBankOrder()}
 								className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#f3913e] to-[#f54900] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
 							>
@@ -1830,7 +1712,10 @@ export function Workspace() {
 									</div>
 									<BankDetailsLink id={bankOrder.id} />
 									<p className="mt-2">
-										Transfer the displayed EUR amount and copy the payment reference exactly. Pay from the buyer account shown above. Tokens are credited only after the administrator confirms receipt.
+										Transfer the displayed EUR amount and copy the payment
+										reference exactly. Pay from the buyer account shown above.
+										Tokens are credited only after the administrator confirms
+										receipt.
 									</p>
 									{[
 										"awaiting_payment",
@@ -1881,161 +1766,15 @@ export function Workspace() {
 								</ul>
 							)}
 						</div>
-						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
-							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-								Custom amount (invoice order)
-							</div>
-							<div className="mt-2 flex items-baseline justify-between gap-3">
-								<span className="text-2xl font-black text-white">
-									€{customEur}
-								</span>
-								<span className="text-sm font-bold text-[#f3913e]">
-									{(customEur * TOKENS_PER_EUR).toLocaleString("en-US")} tokens
-								</span>
-							</div>
-							<label
-								className="mt-3 block text-xs text-[#b8ac90]"
-								htmlFor="studio-token-range"
-							>
-								Choose an amount between €1 and €10,000
-							</label>
-							<input
-								id="studio-token-range"
-								type="range"
-								min={1}
-								max={10000}
-								step={1}
-								value={customEur}
-								onChange={(e) => setCustomEur(Number(e.target.value))}
-								className="mt-2 w-full"
-							/>
-							<div className="mt-3 flex items-center gap-2">
-								<label
-									className="text-xs text-[#8a7e6f]"
-									htmlFor="studio-token-eur"
-								>
-									€
-								</label>
-								<input
-									id="studio-token-eur"
-									type="number"
-									min={1}
-									max={10000}
-									step={1}
-									value={customEur}
-									onChange={(e) =>
-										setCustomEur(
-											Math.max(1, Math.min(10000, Number(e.target.value) || 1)),
-										)
-									}
-									className="w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
-								/>
-								<button
-									type="button"
-									disabled={busy}
-									onClick={() => void placeOrder(customEur)}
-									className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#f3913e] to-[#f54900] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
-								>
-									Place invoice order ↗
-								</button>
-							</div>
-							<p className="mt-3 text-xs text-[#8a7e6f]">
-								No online payment is taken here. After you place the order,{" "}
-								{COMPANY.name} issues an invoice; tokens are credited by an
-								administrator after payment.
-							</p>
-						</div>
-						<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
-							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-								My invoice orders
-							</div>
-							{orders.length === 0 ? (
-								<p className="mt-2 text-xs text-[#8a7e6f]">
-									No orders yet. Place your first invoice order above.
+						{isAdmin && bankAdmin ? (
+							<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
+								<div className="text-xs text-[#8a7e6f] font-bold uppercase">
+									Administrator view
+								</div>
+								<p className="mt-2 text-[11px] text-[#8a7e6f]">
+									Only emails listed in ADMIN_EMAILS can confirm transfers,
+									refund and credit tokens.
 								</p>
-							) : (
-								<ul className="mt-3 space-y-2">
-									{orders
-										.filter((o) => isAdmin || !o.email || true)
-										.slice(0, isAdmin ? 100 : 50)
-										.map((o) => (
-											<li
-												key={o.id}
-												className="rounded-lg border border-[#2a1c10] bg-[#1f140b] p-3 text-xs text-[#d0c6b4]"
-											>
-												<div className="flex items-center justify-between gap-2">
-													<span className="font-bold text-white">
-														€{o.eur_amount} = {o.tokens.toLocaleString("en-US")}{" "}
-														tokens
-													</span>
-													<span className="rounded-full border border-[#3a2a1a] px-2 py-0.5 text-[10px] font-bold uppercase text-[#ffe4a6]">
-														{o.status}
-													</span>
-												</div>
-												<div className="mt-1 text-[11px] text-[#8a7e6f]">
-													{new Date(o.created_at).toLocaleString()} ·{" "}
-													{o.id.slice(0, 8)}
-													{o.email && isAdmin ? ` · ${o.email}` : ""}
-												</div>
-												{o.admin_note && (
-													<div className="mt-1 text-[11px] text-[#ffe4a6]">
-														Admin: {o.admin_note}
-													</div>
-												)}
-												{isAdmin &&
-													o.status !== "credited" &&
-													o.status !== "cancelled" && (
-														<div className="mt-2 flex flex-wrap items-center gap-2">
-															<input
-																value={adminBusyId === o.id ? "" : adminNote}
-																onChange={(e) => setAdminNote(e.target.value)}
-																placeholder="Admin note (optional)"
-																maxLength={2000}
-																className="min-w-0 flex-1 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
-															/>
-															<button
-																type="button"
-																disabled={adminBusyId === o.id}
-																onClick={() =>
-																	void decideOrder(o.id, "invoiced")
-																}
-																className="rounded-full border border-[#3a2a1a] px-3 py-1.5 text-[11px] font-bold text-[#ffe4a6] disabled:opacity-60"
-															>
-																Invoiced
-															</button>
-															<button
-																type="button"
-																disabled={adminBusyId === o.id}
-																onClick={() =>
-																	void decideOrder(o.id, "credited")
-																}
-																className="rounded-full bg-[#0f2e1a] border border-[#1f8a3b] px-3 py-1.5 text-[11px] font-bold text-[#33ec64] disabled:opacity-60"
-															>
-																Credit tokens
-															</button>
-															<button
-																type="button"
-																disabled={adminBusyId === o.id}
-																onClick={() =>
-																	void decideOrder(o.id, "cancelled")
-																}
-																className="rounded-full border border-[#e93e3a] px-3 py-1.5 text-[11px] font-bold text-[#ff9988] disabled:opacity-60"
-															>
-																Cancel
-															</button>
-														</div>
-													)}
-											</li>
-										))}
-								</ul>
-							)}
-							{isAdmin && (
-								<p className="mt-3 text-[11px] text-[#8a7e6f]">
-									Administrator view: recent orders across all users. Only
-									emails in ADMIN_EMAILS can credit tokens.
-								</p>
-							)}
-							{isAdmin && bankAdmin ? (
 								<BankAdminCard
 									order={bankAdmin}
 									busyId={adminBusyId}
@@ -2047,15 +1786,15 @@ export function Workspace() {
 									setEvidenceMsg={setBankEvidenceMsg}
 									call={bankAdminCall}
 								/>
-							) : null}
-						</div>
+							</div>
+						) : null}
 						<p className="text-xs text-[#b8ac90]">
-							Infini handles online checkout; available methods depend on
-							merchant approval. Tokens are credited only after server-side
-							payment verification, not on return from checkout. Invoice orders
-							remain separate. Token expiry enforcement, refunds and mandatory
-							consumer disclosures must be completed before commercial launch.
-							Tokens cannot be transferred or withdrawn.
+							Card payments are processed by Infini; the methods offered depend on
+							the merchant account. Online orders are credited only after
+							server-side verification of the payment, never on return from
+							checkout. Bank transfers are credited after the administrator
+							confirms the receipt. Tokens are valid for 12 months from the
+							credit date and cannot be transferred or withdrawn.
 						</p>
 						<p className="text-xs text-[#b8ac90] mt-3">
 							<Link href="/terms-and-conditions">Terms and Conditions</Link> ·{" "}

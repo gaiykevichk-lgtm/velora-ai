@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS workspaces (id uuid PRIMARY KEY, user_id uuid NOT NUL
 CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS runs (id uuid PRIMARY KEY, workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, mode text NOT NULL CHECK(mode IN ('text','image','video')), prompt text NOT NULL, result text, provider_job_id text, tokens_spent int NOT NULL DEFAULT 0, status text NOT NULL CHECK(status IN ('pending','completed','failed')), error text, created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_runs_workspace ON runs(workspace_id, created_at ASC);
+CREATE TABLE IF NOT EXISTS token_lots (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, tokens int NOT NULL CHECK(tokens>0), remaining int NOT NULL CHECK(remaining>=0), expires_at timestamptz NOT NULL, source text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS idx_token_lots_user ON token_lots(user_id, expires_at);
 CREATE TABLE IF NOT EXISTS token_transactions (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, amount int NOT NULL, reason text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_tokens_user ON token_transactions(user_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS token_orders (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, email text NOT NULL, eur_amount int NOT NULL CHECK(eur_amount BETWEEN 1 AND 10000), tokens int NOT NULL CHECK(tokens>0), status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','invoiced','credited','cancelled')), admin_note text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(), decided_at timestamptz);
@@ -28,7 +30,7 @@ CREATE TABLE IF NOT EXISTS payment_orders (id uuid PRIMARY KEY, user_id uuid NOT
 CREATE INDEX IF NOT EXISTS idx_payment_user ON payment_orders(user_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS bank_buyers (user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, profile jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS bank_seq (year int PRIMARY KEY, last_no int NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS bank_orders (id uuid PRIMARY KEY, public_number text NOT NULL UNIQUE, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, email text NOT NULL, eur_amount int NOT NULL CHECK(eur_amount BETWEEN 1 AND 2500), tokens int NOT NULL, buyer jsonb NOT NULL, seller jsonb NOT NULL, description text NOT NULL, terms_version text NOT NULL, terms_text text NOT NULL, consent_text text NOT NULL, status text NOT NULL DEFAULT 'awaiting_payment' CHECK(status IN ('awaiting_payment','confirmed','partial','review','reported','credited','cancelled','refunded')), confirmed_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS bank_orders (id uuid PRIMARY KEY, public_number text NOT NULL UNIQUE, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, email text NOT NULL, eur_amount int NOT NULL CONSTRAINT bank_orders_eur_amount_range CHECK(eur_amount BETWEEN 2 AND 2500), tokens int NOT NULL, buyer jsonb NOT NULL, seller jsonb NOT NULL, description text NOT NULL, terms_version text NOT NULL, terms_text text NOT NULL, consent_text text NOT NULL, status text NOT NULL DEFAULT 'awaiting_payment' CHECK(status IN ('awaiting_payment','confirmed','partial','review','reported','credited','cancelled','refunded')), confirmed_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_bank_orders_user ON bank_orders(user_id, confirmed_at);
 CREATE TABLE IF NOT EXISTS bank_order_events (id uuid PRIMARY KEY, order_id uuid NOT NULL REFERENCES bank_orders(id) ON DELETE CASCADE, kind text NOT NULL, payload jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS bank_payments (id uuid PRIMARY KEY, order_id uuid NOT NULL REFERENCES bank_orders(id) ON DELETE CASCADE, sender_name text NOT NULL, amount_cents int NOT NULL CHECK(amount_cents>0), currency text NOT NULL DEFAULT 'EUR', received_date date NOT NULL, bank_ref text, payment_ref text, match_basis text, decided_by text NOT NULL, decided_at timestamptz NOT NULL DEFAULT now(), created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(order_id, bank_ref));
@@ -107,7 +109,13 @@ const MIGRATIONS = [
 	"ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false",
 	`CREATE TABLE IF NOT EXISTS email_verifications (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash text NOT NULL UNIQUE, expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
 	"CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id)",
+	// Commercial limit changed from EUR 1 to EUR 2. NOT VALID keeps historical
+	// rows intact while every new order is checked against the new minimum.
+	"ALTER TABLE bank_orders DROP CONSTRAINT IF EXISTS bank_orders_eur_amount_check",
+	"ALTER TABLE bank_orders ADD CONSTRAINT bank_orders_eur_amount_range CHECK(eur_amount BETWEEN 2 AND 2500) NOT VALID",
 ];
+// Duplicate-object errors mean the migration already ran on this database.
+const ALREADY_APPLIED = new Set(["42710", "42701", "42P07"]);
 async function ensureSchema(p: Pool): Promise<void> {
 	if (!schemaReady) {
 		schemaReady = (async () => {
@@ -115,7 +123,15 @@ async function ensureSchema(p: Pool): Promise<void> {
 				await p.query(statement);
 			}
 			for (const statement of MIGRATIONS) {
-				await p.query(statement);
+				try {
+					await p.query(statement);
+				} catch (error) {
+					const code = (error as { code?: string }).code;
+					if (code && ALREADY_APPLIED.has(code)) continue;
+					// A later migration must never take the running app down: the
+					// base schema is already in place, so record and move on.
+					console.error("Migration skipped:", statement.slice(0, 80), code);
+				}
 			}
 		})().catch((e) => {
 			schemaReady = undefined;

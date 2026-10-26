@@ -10,7 +10,7 @@ import { connect, type Socket } from "node:net";
 import { connect as connectTls } from "node:tls";
 
 export function verificationConfig() {
-	const host = (process.env.SMTP_HOST?.trim() || "smtp.resend.com");
+	const host = process.env.SMTP_HOST?.trim() || "smtp.resend.com";
 	const from = process.env.SMTP_FROM?.trim();
 	const base = (process.env.APP_BASE_URL ?? "").trim().replace(/\/$/, "");
 	if (!host || !from || !base) return null;
@@ -72,10 +72,7 @@ async function smtpSend(opts: {
 	let sock: Socket;
 	const ready = (expected: number[]) =>
 		new Promise<string>((resolve, reject) => {
-			const timer = setTimeout(
-				() => reject(new Error("SMTP timeout")),
-				20_000,
-			);
+			const timer = setTimeout(() => reject(new Error("SMTP timeout")), 20_000);
 			const check = () => {
 				const idx = buffer.indexOf("\r\n");
 				if (idx < 0) return;
@@ -138,7 +135,9 @@ async function smtpSend(opts: {
 			await send(`${b64(opts.pass)}\r\n`);
 			await ready([235]);
 		}
-		await send(`MAIL FROM:<${escapeHeader(opts.from.match(/<([^>]+)>/)?.[1] ?? opts.from)}>\r\n`);
+		await send(
+			`MAIL FROM:<${escapeHeader(opts.from.match(/<([^>]+)>/)?.[1] ?? opts.from)}>\r\n`,
+		);
 		await ready([250]);
 		await send(`RCPT TO:<${escapeHeader(opts.to)}>\r\n`);
 		await ready([250, 251]);

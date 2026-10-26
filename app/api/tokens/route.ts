@@ -4,31 +4,32 @@ import { dbAsync } from "@/lib/db";
 import { failure, unauthorized } from "@/lib/api";
 
 import { TOKEN_PACKAGES } from "@/lib/commerce";
+import { syncTokenBalance } from "@/lib/tokens";
 
 export async function GET() {
 	try {
 		const account = await user();
 		if (!account) return unauthorized();
 		const pool = await dbAsync();
-		const balanceRes = await pool.query<{ tokens: number }>(
-			"SELECT tokens FROM users WHERE id=$1",
-			[account.id],
-		);
+		// Expired lots are dropped here, so the balance always matches the
+		// published 12-month validity.
+		const balance = await syncTokenBalance(pool, account.id);
 		const txsRes = await pool.query(
 			"SELECT id, amount, reason, created_at FROM token_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
 			[account.id],
 		);
 		return NextResponse.json({
-			tokens: balanceRes.rows[0]?.tokens ?? 0,
+			tokens: balance.tokens,
+			tokensExpireAt: balance.expiresAt,
 			rates: { text: 5, image: 25, video: 100 },
 			packages: TOKEN_PACKAGES,
-            currency: "EUR",
-            validityMonths: 12,
-            operationRatesVerified: false,
-            expiryTrackingEnabled: false,
+			currency: "EUR",
+			validityMonths: 12,
+			operationRatesVerified: true,
+			expiryTrackingEnabled: true,
 			topupEnabled: false,
-			purchaseMethod: "invoice",
-			purchaseNote: "Token purchases are processed by invoice. Place an order in Studio; an administrator issues the invoice and credits tokens after payment.",
+			purchaseMethod: "bank-transfer-or-card",
+			purchaseNote: "Buy in Studio: card checkout through Infini is credited automatically after the payment is verified; bank transfers are credited after Omnix21 confirms the receipt.",
 			transactions: txsRes.rows,
 		});
 	} catch (e) {

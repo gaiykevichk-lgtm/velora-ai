@@ -1,5 +1,7 @@
 node_modules
 .next
+.next-dev
+.next-*
 .next-build
 .next-preview
 .next-editorial
