@@ -63,3 +63,10 @@
 - `216.24.57.16` (адрес `www.veloraai.pro` и `velora-ai-u7sx.onrender.com`) отдаёт валидный сертификат `CN=veloraai.pro`.
 - Проверка с подменой адреса: `curl --resolve veloraai.pro:443:216.24.57.16 https://veloraai.pro/` → 200 (52604 байта, заголовок «Velora AI — Automated AI Video & Image Generation»), `/api/health` → `{"db":true}`.
 - Вывод: в Render домен верифицирован и сертификат выдан; неверна только A-запись апекса. Нужно заменить `216.24.57.1` на `216.24.57.16` (второй адрес `216.24.57.18`). После этого вернуть `APP_BASE_URL=https://veloraai.pro`.
+
+### Выложено на прод (2026-10-26, 13:05 UTC)
+- Push в `main` прошёл коммитами `d090f55` и `b15b8a9` (в этом окружении нужен `GIT_CONFIG_COUNT=10`, иначе git берёт устаревший заголовок прокси и получает 401).
+- Автоматический деплой по пушу не сработал; деплой запущен через Render API: `dep-dbfks6qvcj2c738hgpmg` (d090f55) и `dep-dbfku6e7bikc73dv7srg` (b15b8a9), оба `live`.
+- Проверено на `https://velora-ai-u7sx.onrender.com`: `/api/bank-transfer/config` → `minEur: 2, maxEur: 2500, configured: true`; на `/`, `/pricing`, `/faq`, `/terms-and-conditions` нет `Release draft`, `€10,000`, `Vidorya`, `Local preview`, `to be confirmed`; `/api/bank-transfer/orders` → 401, `/api/payments/webhook` → 401 по подписи.
+- Гостю в панели пополнения теперь показывается «Sign in to pay by card» вместо ложного «Card payments are temporarily unavailable»; состояние «временно недоступно» осталось только для авторизованного пользователя при выключенном приёме карт.
+- Домен: проверка через внешний сервис Promto (не из песочницы) — `example.com` открывается, `https://veloraai.pro` и `https://www.veloraai.pro` недоступны, значит проблема не в сети песочницы. `APP_BASE_URL` остаётся на адресе onrender до подтверждения работы апекса.
