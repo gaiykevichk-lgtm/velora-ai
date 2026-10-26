@@ -58,3 +58,23 @@
    `could not read Username for 'https://github.com'`), чтобы Render
    с `autoDeploy: true` подхватил изменения, либо деплой вручную.
 3. Проверить на проде: регистрация → письмо → ссылка → вход → генерация.
+
+## Состояние продакшена (Render), проверено 2026-10-26
+
+- Сервис: `velora-ai`, web service `srv-db58ik7lk1mc73943fb0`, регион Frankfurt, ветка `main`.
+- Публичный адрес сервиса: `https://velora-ai-u7sx.onrender.com` — HTTP 200.
+- Переменные окружения заданы через Render API: `RESEND_API_KEY`, `SMTP_PASSWORD`,
+  `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USER=resend`,
+  `SMTP_FROM=Velora <no-reply@veloraai.pro>`, `APP_BASE_URL=https://veloraai.pro`.
+- Деплой `dep-dbfk0h1srm7s73f91550` (commit `817fc151`) — статус `live`.
+
+### Открытые блокеры
+
+1. В Resend домен `veloraai.pro` не подтверждён: отправка возвращает
+   `403 validation_error: domain is not verified`. Ключ ограничен правом только
+   на отправку (`restricted_api_key`), поэтому добавить домен через API нельзя.
+   Нужно добавить домен в панели Resend и внести выданные DNS-записи у регистратора.
+2. Апекс `veloraai.pro` не отвечает: A-запись указывает на `216.24.57.1`,
+   TLS-соединение обрывается. `www.veloraai.pro` отвечает 301 и редиректит
+   на апекс, то есть ссылки из писем (`APP_BASE_URL`) сейчас не открываются.
+   Пока домен не исправлен, ссылку подтверждения лучше строить от рабочего адреса сервиса.
