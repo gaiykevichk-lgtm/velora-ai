@@ -39,3 +39,11 @@ bank_audit_log: who did what to which order and when.
 - Email failures never change paid state and stay visible to admin.
 - Terms/profile edits do not rewrite old orders because orders embed their own snapshot.
 - Missing reference, mismatch, partial, and non-EUR findings stay on manual review.
+
+## Админ-действия и доступ к базе (2026-10-26)
+
+Администратор определяется переменной `ADMIN_EMAILS` (список адресов через запятую). Без неё на проде некому подтверждать банковские переводы: заказ остаётся в `awaiting_payment`.
+
+`POST /api/bank-transfer/admin?action=grant` — служебное начисление токенов существующему аккаунту без заказа: `{ email, tokens, verify?, note? }`. Используется для поддержки и тестовых проверок; пишет запись в `token_lots`, `token_transactions` и `bank_audit_log` (`account.granted`), `verify: true` дополнительно подтверждает почту аккаунта. Требует сессию адреса из `ADMIN_EMAILS`.
+
+Прямое подключение к прод-базе извне недоступно: у free-инстанса Render (`velora-db`, `dpg-db586nrrjlhs73cosv70-a`, Frankfurt, PostgreSQL 16) внешние соединения закрыты — TCP и TLS поднимаются, но сервер закрывает соединение сразу после startup-пакета (проверено `pg`, `pg8000` и сырым протоколом). Все изменения данных выполняются через приложение на Render. Тот же free-инстанс имеет `expiresAt = 2026-11-09`: после этой даты база будет приостановлена, поэтому до неё нужен платный план Postgres или перенос данных.
