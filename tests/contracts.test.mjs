@@ -8,6 +8,7 @@ test("provider credentials stay server-side", () => {
 	assert.match(env, /VIDEO_STATUS_URL=/);
 	assert.match(env, /TEXT_MODEL=google\/gemini-3\.8-flash/);
 	assert.match(env, /IMAGE_MODEL=qwen\/qwen-image-3-pro/);
+	assert.match(env, /IMAGE_EDIT_MODEL=google\/gemini-3\.1-flash-image-preview/);
 	assert.match(env, /VIDEO_MODEL=minimax\/hailuo-3/);
 	assert.match(env, /TEXT_API_KEY=\n/);
 	assert.doesNotMatch(env, /NEXT_PUBLIC_/);

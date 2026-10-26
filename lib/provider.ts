@@ -99,17 +99,21 @@ export async function generateImage(
 	const base = baseUrl(process.env.IMAGE_API_BASE_URL!);
 	const key = process.env.IMAGE_API_KEY!;
 	const model = process.env.IMAGE_MODEL!;
+	// Editing needs a multimodal model that accepts image input on
+	// /chat/completions; pure generation models (qwen-image-3-pro,
+	// gpt-image-2.5-sunburst) reject that endpoint.
+	const editModel = process.env.IMAGE_EDIT_MODEL?.trim() || model;
 
 	let data: any;
 	if (reference) {
-		// Qwen image edit path: OpenRouter-compatible chat completions with image input.
+		// OpenRouter-compatible chat completions with image input.
 		data = await providerFetch(
 			`${base}/chat/completions`,
 			{
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					model,
+					model: editModel,
 					messages: [
 						{
 							role: "user",
