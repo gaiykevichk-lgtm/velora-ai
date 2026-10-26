@@ -11,7 +11,6 @@ import {
 import { dbAsync } from "@/lib/db";
 import { failure } from "@/lib/api";
 import {
-	isSmtpConfigured,
 	newVerificationToken,
 	sendVerificationEmail,
 } from "@/lib/verify-email";
@@ -49,6 +48,7 @@ export async function POST(req: NextRequest) {
 		}>("SELECT id,password_hash,email_verified FROM users WHERE email=$1", [email]);
 		let id: string;
 		let needsVerification = false;
+		let emailSent = false;
 		let devVerifyLink: string | null = null;
 		if (req.nextUrl.searchParams.get("action") === "register") {
 			if (found.rowCount)
@@ -78,11 +78,13 @@ export async function POST(req: NextRequest) {
 					[randomUUID(), id, tokenHash],
 				);
 				const result = await sendVerificationEmail(email, token);
+				emailSent = result.sent;
 				if (!result.sent && process.env.NODE_ENV !== "production")
 					devVerifyLink = result.link;
 			} catch {
 				// Account is created; the link can be re-requested via resend.
 				needsVerification = true;
+				emailSent = false;
 			}
 		} else {
 			if (
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest) {
 			...(needsVerification
 				? {
 						needsVerification: true as const,
-						emailSent: isSmtpConfigured(),
+						emailSent,
 						...(devVerifyLink ? { devVerifyLink } : {}),
 					}
 				: {}),

@@ -83,7 +83,17 @@ export async function POST(req: Request) {
 			"INSERT INTO email_verifications (id, user_id, token_hash, expires_at) VALUES ($1,$2,$3,now()+interval '24 hours')",
 			[randomUUID(), account.id, tokenHash],
 		);
-		const result = await sendVerificationEmail(normalized, token);
+		let result: { sent: boolean; link: string | null };
+		try {
+			result = await sendVerificationEmail(normalized, token);
+		} catch (sendError) {
+			return NextResponse.json(
+				{
+					error: (sendError as Error).message,
+				},
+				{ status: 503 },
+			);
+		}
 		const dev =
 			process.env.NODE_ENV !== "production" && !isSmtpConfigured();
 		return NextResponse.json({
