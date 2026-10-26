@@ -1500,11 +1500,13 @@ export function Workspace() {
 								<button
 									key={id}
 									type="button"
-									disabled={busy || !onlineEnabled}
+									disabled={busy || !onlineEnabled || !account}
 									title={
-										onlineEnabled
-											? "Continue to Infini"
-											: "Online payments are not configured"
+										!account
+											? "Sign in to pay by card"
+											: onlineEnabled
+												? "Continue to Infini"
+												: "Card payments are temporarily unavailable"
 									}
 									onClick={() =>
 										void checkout(id as keyof typeof TOKEN_PACKAGES)
@@ -1519,15 +1521,23 @@ export function Workspace() {
 										{p.tokens.toLocaleString("en-US")} tokens
 									</div>
 									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">
-										{onlineEnabled
-											? "Pay with Infini ↗"
-											: "Online payment unavailable"}
+										{!account
+											? "Sign in to pay by card"
+											: onlineEnabled
+												? "Pay with Infini ↗"
+												: "Online payment unavailable"}
 									</div>
 								</button>
 							))}
 						</div>
 
-						{!onlineEnabled && (
+						{!account && (
+							<p className="text-sm text-[#ffe4a6]">
+								Sign in or create an account to pay by card. You can also order by
+								bank transfer below — the same tokens either way.
+							</p>
+						)}
+						{account && !onlineEnabled && (
 							<p className="text-sm text-[#ffe4a6]">
 								Card payments are temporarily unavailable. No charge has been
 								made — use the bank transfer order below.
@@ -1548,7 +1558,7 @@ export function Workspace() {
 									{o.status !== "credited" && (
 										<button
 											type="button"
-											disabled={busy || !onlineEnabled}
+											disabled={busy || !account}
 											className="block mt-2 underline"
 											onClick={() => void refreshPayments(o.id)}
 										>
