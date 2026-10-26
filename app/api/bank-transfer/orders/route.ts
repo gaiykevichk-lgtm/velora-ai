@@ -247,7 +247,6 @@ export async function POST(req: NextRequest) {
 							JSON.stringify({ tokens, eur: parsed.data.eurAmount }),
 						],
 					);
-					if (kind === "invoice") order.invoice_number = docNumber;
 				}
 				const rows = await client.query(
 					"SELECT * FROM bank_orders WHERE id=$1",

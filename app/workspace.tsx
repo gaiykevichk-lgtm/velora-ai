@@ -1533,8 +1533,8 @@ export function Workspace() {
 
 						{!account && (
 							<p className="text-sm text-[#ffe4a6]">
-								Sign in or create an account to pay by card. You can also order by
-								bank transfer below — the same tokens either way.
+								Sign in or create an account to pay by card. You can also order
+								by bank transfer below — the same tokens either way.
 							</p>
 						)}
 						{account && !onlineEnabled && (

@@ -70,3 +70,9 @@
 - Проверено на `https://velora-ai-u7sx.onrender.com`: `/api/bank-transfer/config` → `minEur: 2, maxEur: 2500, configured: true`; на `/`, `/pricing`, `/faq`, `/terms-and-conditions` нет `Release draft`, `€10,000`, `Vidorya`, `Local preview`, `to be confirmed`; `/api/bank-transfer/orders` → 401, `/api/payments/webhook` → 401 по подписи.
 - Гостю в панели пополнения теперь показывается «Sign in to pay by card» вместо ложного «Card payments are temporarily unavailable»; состояние «временно недоступно» осталось только для авторизованного пользователя при выключенном приёме карт.
 - Домен: проверка через внешний сервис Promto (не из песочницы) — `example.com` открывается, `https://veloraai.pro` и `https://www.veloraai.pro` недоступны, значит проблема не в сети песочницы. `APP_BASE_URL` остаётся на адресе onrender до подтверждения работы апекса.
+
+### Исправлена критическая ошибка создания заказа (2026-10-26, 13:15 UTC)
+- В `app/api/bank-transfer/orders/route.ts` осталась строка `order.invoice_number = docNumber` внутри цикла документов, до присвоения `order` из `SELECT`. Любой новый заказ банковского перевода падал с `TypeError: Cannot set properties of undefined` и отдавал 500 «Something went wrong». Ошибка присутствовала и в коммите `817fc151`, то есть на проде ломала весь путь покупки.
+- Строка удалена (номер счёта и раньше подставлялся ниже из `bank_order_documents`).
+- Проверено на локальном сервере с прод-подобным окружением: заказ на €20 → 201, `publicNumber VEL-2026-000003`, `invoiceNumber INV-2026-000003`, 2000 токенов, реквизиты Omnix21/LHV в ответе, заказ виден в списке; суммы €1 и €2 501 отклоняются с 400.
+- `lib/db.ts`: `VELORA_TEST_DB=memory` теперь имеет приоритет над `DATABASE_URL`, чтобы можно было проверять полное прод-окружение локально, не подключаясь к реальной базе.

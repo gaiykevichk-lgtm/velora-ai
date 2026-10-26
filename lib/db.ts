@@ -143,6 +143,9 @@ async function ensureSchema(p: Pool): Promise<void> {
 
 export async function dbAsync(): Promise<Pool | Queryable> {
 	// Test-only fallback: in-process PostgreSQL-compatible database (no persistence).
+	// Checked first so a full production-like environment (including DATABASE_URL)
+	// can still be exercised locally without touching a real database.
+	if (process.env.VELORA_TEST_DB === "memory") return memoryDb();
 	if (process.env.DATABASE_URL) {
 		const p = db() as Pool;
 		// CREATE TABLE IF NOT EXISTS — safe to run on every cold start, so a
