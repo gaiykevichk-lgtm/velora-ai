@@ -67,7 +67,10 @@ export async function syncTokenBalance(
 	const row = lots.rows[0];
 	if (row && Number(row.count) > 0) {
 		const tokens = Number(row.tokens) || 0;
-		await pool.query("UPDATE users SET tokens=$2 WHERE id=$1", [userId, tokens]);
+		await pool.query("UPDATE users SET tokens=$2 WHERE id=$1", [
+			userId,
+			tokens,
+		]);
 		return {
 			tokens,
 			expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,

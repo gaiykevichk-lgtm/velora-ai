@@ -1789,8 +1789,8 @@ export function Workspace() {
 							</div>
 						) : null}
 						<p className="text-xs text-[#b8ac90]">
-							Card payments are processed by Infini; the methods offered depend on
-							the merchant account. Online orders are credited only after
+							Card payments are processed by Infini; the methods offered depend
+							on the merchant account. Online orders are credited only after
 							server-side verification of the payment, never on return from
 							checkout. Bank transfers are credited after the administrator
 							confirms the receipt. Tokens are valid for 12 months from the

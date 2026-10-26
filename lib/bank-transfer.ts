@@ -32,8 +32,7 @@ export function bankConfig() {
 	const termsVersion =
 		process.env.BANK_TERMS_VERSION?.trim() || "2026-10-26-v1";
 	const termsText =
-		process.env.BANK_TERMS_TEXT?.trim() ||
-		FINAL_BANK_TERMS_TEXT;
+		process.env.BANK_TERMS_TEXT?.trim() || FINAL_BANK_TERMS_TEXT;
 	const validityMonths = Number(process.env.BANK_TOKEN_VALIDITY_MONTHS ?? "12");
 	const creditDays = Number(process.env.BANK_CREDIT_DAYS_AFTER_RECEIPT ?? "2");
 	if (

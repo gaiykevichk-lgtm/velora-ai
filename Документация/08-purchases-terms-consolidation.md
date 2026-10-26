@@ -46,3 +46,14 @@
 ## Остаётся согласовать
 - Подтверждение домена `veloraai.pro` в Resend (письма реальным пользователям пока не уходят).
 - A-запись апекса `veloraai.pro` (сейчас TLS-обрыв), из-за чего ссылки из писем и возврат с checkout не открываются.
+
+## Статус выкладки (2026-10-26, 12:40 UTC)
+- Переменные Render для банковского перевода и Infini выставлены, сервис перезапущен:
+  `BANK_TRANSFER_ENABLED=true`, `BANK_SELLER_*`, `BANK_TERMS_VERSION=2026-10-26-v1`,
+  `INFINI_ENABLED=true`, `INFINI_KEY_ID`, `INFINI_SECRET_KEY`, `INFINI_WEBHOOK_SECRET`,
+  `APP_BASE_URL=https://velora-ai-u7sx.onrender.com` (временно, пока апекс домена не работает).
+- Проверено на проде: `/api/bank-transfer/config` → `enabled:true, configured:true`;
+  `/api/bank-transfer/orders` → 401 вместо прежнего 500; `/api/payments/webhook` → 401 по подписи
+  (значит секрет и маршрут живы); `/api/payments/checkout` с корректным Origin → 401 (конфигурация принята).
+- Код с этими изменениями **не выложен**: push в GitHub отклонён (репозиторий не подключён к рабочему столу),
+  поэтому на проде пока предыдущий коммит `817fc151` с лимитом €1 и старыми текстами.

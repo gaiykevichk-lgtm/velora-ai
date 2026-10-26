@@ -1,9 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import {
-	BANK_MAX_EUR,
-	BANK_MIN_EUR,
-	bankConfig,
-} from "@/lib/bank-transfer";
+import { BANK_MAX_EUR, BANK_MIN_EUR, bankConfig } from "@/lib/bank-transfer";
 import { failure } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -46,8 +42,7 @@ export async function GET(_req: NextRequest) {
 				Number(process.env.BANK_TOKEN_VALIDITY_MONTHS ?? "12") || 12;
 			creditDays =
 				Number(process.env.BANK_CREDIT_DAYS_AFTER_RECEIPT ?? "2") || 2;
-			termsVersion =
-				process.env.BANK_TERMS_VERSION?.trim() || "2026-10-26-v1";
+			termsVersion = process.env.BANK_TERMS_VERSION?.trim() || "2026-10-26-v1";
 		}
 		return NextResponse.json(
 			{

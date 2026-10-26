@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { VeloraLogo } from "./logo";
-import { ContactForm, CookiePreferences, TokenEstimator } from "./public-controls";
+import {
+	ContactForm,
+	CookiePreferences,
+	TokenEstimator,
+} from "./public-controls";
 import { COMPANY } from "@/lib/company";
 import { TOKEN_PACKAGES } from "@/lib/commerce";
 
@@ -233,7 +237,11 @@ export const pages: Record<SitePage, Page> = {
 			["Company", `${COMPANY.name} — ${COMPANY.registration}`],
 		],
 	},
-	faq: { title: "Quick answers", lead: "Account, generation and prepaid token questions.", blocks: faq },
+	faq: {
+		title: "Quick answers",
+		lead: "Account, generation and prepaid token questions.",
+		blocks: faq,
+	},
 	"terms-and-conditions": {
 		title: "Terms and Conditions",
 		lead: `Terms of sale and use of Velora AI, operated by ${COMPANY.name} (${COMPANY.registration}), France. Version 2026-10-26.`,
@@ -309,7 +317,9 @@ export function SiteFooter() {
 				</div>
 			</div>
 			<div className="v-footer-bottom">
-				<span>© {new Date().getFullYear()} Velora AI. All rights reserved.</span>
+				<span>
+					© {new Date().getFullYear()} Velora AI. All rights reserved.
+				</span>
 				<CookiePreferences />
 			</div>
 		</footer>

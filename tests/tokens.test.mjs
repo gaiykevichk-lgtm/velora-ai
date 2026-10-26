@@ -34,7 +34,11 @@ test("spending consumes the lot that expires first", () => {
 });
 
 test("expired lots never pay for a run", () => {
-	const plan = planConsumption([lot("old", 5000, -1), lot("live", 100, 30)], 100, now);
+	const plan = planConsumption(
+		[lot("old", 5000, -1), lot("live", 100, 30)],
+		100,
+		now,
+	);
 	assert.deepEqual(plan.expired, ["old"]);
 	assert.deepEqual(plan.consume, [{ id: "live", take: 100 }]);
 	assert.equal(plan.shortfall, 0);
@@ -66,7 +70,9 @@ function fakePool(rows) {
 							tokens: mine.reduce((s, l) => s + l.remaining, 0),
 							expires_at: mine.length
 								? new Date(
-										Math.max(...mine.map((l) => new Date(l.expires_at).getTime())),
+										Math.max(
+											...mine.map((l) => new Date(l.expires_at).getTime()),
+										),
 									)
 								: null,
 						},
@@ -99,8 +105,18 @@ function fakePool(rows) {
 
 test("expired purchase is dropped from the spendable balance", async () => {
 	const pool = fakePool([
-		{ id: "old", user_id: "u1", remaining: 2000, expires_at: new Date("2026-01-01T00:00:00Z") },
-		{ id: "new", user_id: "u1", remaining: 1000, expires_at: new Date("2027-06-01T00:00:00Z") },
+		{
+			id: "old",
+			user_id: "u1",
+			remaining: 2000,
+			expires_at: new Date("2026-01-01T00:00:00Z"),
+		},
+		{
+			id: "new",
+			user_id: "u1",
+			remaining: 1000,
+			expires_at: new Date("2027-06-01T00:00:00Z"),
+		},
 	]);
 	const before = Date.now;
 	Date.now = () => now.getTime();
@@ -115,8 +131,18 @@ test("expired purchase is dropped from the spendable balance", async () => {
 
 test("run charge is taken from live lots and keeps the balance consistent", async () => {
 	const pool = fakePool([
-		{ id: "a", user_id: "u1", remaining: 60, expires_at: new Date("2026-11-01T00:00:00Z") },
-		{ id: "b", user_id: "u1", remaining: 200, expires_at: new Date("2027-03-01T00:00:00Z") },
+		{
+			id: "a",
+			user_id: "u1",
+			remaining: 60,
+			expires_at: new Date("2026-11-01T00:00:00Z"),
+		},
+		{
+			id: "b",
+			user_id: "u1",
+			remaining: 200,
+			expires_at: new Date("2027-03-01T00:00:00Z"),
+		},
 	]);
 	const realNow = Date.now;
 	Date.now = () => now.getTime();
@@ -145,7 +171,10 @@ test("credit records one lot with its own expiry date", async () => {
 	const inserts = calls.filter((c) => c.sql.includes("INSERT INTO token_lots"));
 	assert.equal(inserts.length, 1);
 	assert.equal(inserts[0].args[2], 2000);
-	assert.equal(calls.at(-1).sql.startsWith("UPDATE users SET tokens=tokens+$1"), true);
+	assert.equal(
+		calls.at(-1).sql.startsWith("UPDATE users SET tokens=tokens+$1"),
+		true,
+	);
 });
 
 test("a balance credited before lot tracking is carried over, not dropped", async () => {
