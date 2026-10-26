@@ -8,7 +8,15 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
 function loadModule(env) {
-	for (const key of ["RESEND_API_KEY", "SMTP_FROM", "SMTP_PASSWORD", "BANK_MAIL_FROM", "APP_BASE_URL", "SMTP_HOST", "SMTP_USER"]) {
+	for (const key of [
+		"RESEND_API_KEY",
+		"SMTP_FROM",
+		"SMTP_PASSWORD",
+		"BANK_MAIL_FROM",
+		"APP_BASE_URL",
+		"SMTP_HOST",
+		"SMTP_USER",
+	]) {
 		delete process.env[key];
 	}
 	Object.assign(process.env, env);
@@ -33,7 +41,11 @@ test("mail is sent through the Resend HTTPS API when a key is present", async ()
 	};
 	try {
 		assert.equal(mod.mailConfigured(), true);
-		const result = await mod.sendPlainMail("buyer@example.com", "Subject line", "Body text");
+		const result = await mod.sendPlainMail(
+			"buyer@example.com",
+			"Subject line",
+			"Body text",
+		);
 		assert.equal(result.sent, true);
 		assert.equal(result.messageId, "resend-message-id");
 		assert.equal(calls.length, 1);
