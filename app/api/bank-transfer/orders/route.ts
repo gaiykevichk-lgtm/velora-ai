@@ -18,7 +18,7 @@ import {
 	mailText,
 	textPdf,
 } from "@/lib/bank-transfer";
-import { verificationConfig, sendPlainMail } from "@/lib/verify-email";
+import { mailConfigured, sendPlainMail } from "@/lib/verify-email";
 
 export const runtime = "nodejs";
 const buyerSchema = z.object({
@@ -69,7 +69,6 @@ function docPdf(
 async function sendOrderMail(order: any, origin: string) {
 	// SMTP plumbing lives in verify-email; order mail reuses it through a
 	// direct import-free call to avoid duplicating the SMTP client here.
-	const cfg = verificationConfig();
 	const subject = `Order ${order.public_number} accepted — bank transfer details`;
 	const body = mailText(
 		{
@@ -83,7 +82,7 @@ async function sendOrderMail(order: any, origin: string) {
 		origin,
 	);
 	const pool = await dbAsync();
-	if (!cfg) {
+	if (!mailConfigured()) {
 		await pool.query(
 			"INSERT INTO bank_mail_log (order_id,to_email,subject,body,message_id,state,error) VALUES ($1,$2,$3,$4,$5,'logged-no-smtp','SMTP is not configured; shown to admin only') ON CONFLICT (order_id) DO NOTHING",
 			[order.id, order.email, subject, body, `log-${order.id}`],

@@ -24,8 +24,24 @@ export function verificationConfig() {
 	};
 }
 
-export function isSmtpConfigured() {
+export function mailFrom() {
+	return (
+		process.env.BANK_MAIL_FROM?.trim() ||
+		process.env.SMTP_FROM?.trim() ||
+		""
+	);
+}
+
+// Mail can be delivered either through the Resend HTTPS API (preferred: works
+// wherever 443 is open, incl. hosts that block outbound SMTP) or classic SMTP.
+export function mailConfigured() {
+	if (!mailFrom()) return false;
+	if (process.env.RESEND_API_KEY?.trim()) return true;
 	return verificationConfig() !== null;
+}
+
+export function isSmtpConfigured() {
+	return mailConfigured();
 }
 
 export function newVerificationToken() {
@@ -167,53 +183,83 @@ async function smtpSend(opts: {
 	}
 }
 
-export async function sendPlainMail(to: string, subject: string, text: string) {
+async function resendSend(opts: {
+	apiKey: string;
+	from: string;
+	to: string;
+	subject: string;
+	text: string;
+}) {
+	const res = await fetch("https://api.resend.com/emails", {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${opts.apiKey}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			from: opts.from,
+			to: [opts.to],
+			subject: opts.subject,
+			text: opts.text,
+		}),
+		signal: AbortSignal.timeout(20_000),
+	});
+	if (!res.ok) {
+		const detail = await res.text().catch(() => "");
+		throw new Error(`Resend API ${res.status}: ${detail.slice(0, 200)}`);
+	}
+}
+
+async function deliverMail(to: string, subject: string, text: string) {
+	const from = mailFrom();
+	if (!from) throw new Error("Mail sender is not configured.");
+	const apiKey = process.env.RESEND_API_KEY?.trim();
+	if (apiKey) {
+		await resendSend({ apiKey, from, to, subject, text });
+		return;
+	}
 	const cfg = verificationConfig();
-	if (!cfg) return { sent: false as const, messageId: "" };
+	if (!cfg)
+		throw new Error("Mail transport is not configured (set RESEND_API_KEY).");
+	await smtpSend({
+		host: cfg.host,
+		port: cfg.port,
+		user: cfg.user,
+		pass: cfg.pass,
+		from,
+		to,
+		subject,
+		text,
+	});
+}
+
+export async function sendPlainMail(to: string, subject: string, text: string) {
+	if (!mailConfigured()) return { sent: false as const, messageId: "" };
 	try {
-		await smtpSend({
-			host: cfg.host,
-			port: cfg.port,
-			user: cfg.user,
-			pass: cfg.pass,
-			from: process.env.BANK_MAIL_FROM?.trim() || cfg.from,
-			to,
-			subject,
-			text,
-		});
-		return { sent: true as const, messageId: `smtp-${Date.now()}` };
+		await deliverMail(to, subject, text);
+		return { sent: true as const, messageId: `mail-${Date.now()}` };
 	} catch (e) {
 		throw new Error(`Mail transport failed: ${(e as Error).message}`);
 	}
 }
 
 export async function sendVerificationEmail(to: string, token: string) {
-	const cfg = verificationConfig();
 	const link = verificationLink(token);
 	const subject = "Confirm your Velora account";
 	const text =
 		`Welcome to Velora!\n\n` +
 		`Please confirm your email address by opening this link (valid for 24 hours):\n${link}\n\n` +
 		`If you did not create this account, ignore this message.`;
-	if (!cfg) {
-		// No SMTP configured: log for the operator, expose the link only in dev.
-		console.log(`[verify] SMTP not configured. Verify link for ${to}: ${link}`);
+	if (!mailConfigured()) {
+		// No transport configured: log for the operator, expose the link only in dev.
+		console.log(`[verify] Mail not configured. Verify link for ${to}: ${link}`);
 		return { sent: false as const, link };
 	}
 	try {
-		await smtpSend({
-			host: cfg.host,
-			port: cfg.port,
-			user: cfg.user,
-			pass: cfg.pass,
-			from: cfg.from,
-			to,
-			subject,
-			text,
-		});
+		await deliverMail(to, subject, text);
 		return { sent: true as const, link: null };
 	} catch (e) {
-		console.error("[verify] SMTP send failed:", (e as Error).message);
+		console.error("[verify] Mail send failed:", (e as Error).message);
 		throw new Error("Could not send the confirmation email. Try again later.");
 	}
 }
