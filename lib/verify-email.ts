@@ -208,16 +208,15 @@ async function resendSend(opts: {
 		const detail = await res.text().catch(() => "");
 		throw new Error(`Resend API ${res.status}: ${detail.slice(0, 200)}`);
 	}
+	const body = (await res.json().catch(() => null)) as { id?: string } | null;
+	return body?.id ?? "";
 }
 
 async function deliverMail(to: string, subject: string, text: string) {
 	const from = mailFrom();
 	if (!from) throw new Error("Mail sender is not configured.");
 	const apiKey = process.env.RESEND_API_KEY?.trim();
-	if (apiKey) {
-		await resendSend({ apiKey, from, to, subject, text });
-		return;
-	}
+	if (apiKey) return resendSend({ apiKey, from, to, subject, text });
 	const cfg = verificationConfig();
 	if (!cfg)
 		throw new Error("Mail transport is not configured (set RESEND_API_KEY).");
@@ -231,13 +230,14 @@ async function deliverMail(to: string, subject: string, text: string) {
 		subject,
 		text,
 	});
+	return `smtp-${Date.now()}`;
 }
 
 export async function sendPlainMail(to: string, subject: string, text: string) {
 	if (!mailConfigured()) return { sent: false as const, messageId: "" };
 	try {
-		await deliverMail(to, subject, text);
-		return { sent: true as const, messageId: `mail-${Date.now()}` };
+		const messageId = await deliverMail(to, subject, text);
+		return { sent: true as const, messageId: messageId || `mail-${Date.now()}` };
 	} catch (e) {
 		throw new Error(`Mail transport failed: ${(e as Error).message}`);
 	}
