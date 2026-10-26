@@ -58,6 +58,70 @@ export async function POST(req: NextRequest) {
 		const action = req.nextUrl.searchParams.get("action");
 		const pool = await dbAsync();
 		if (!("connect" in pool)) throw new Error("Bank transfer admin requires persistent PostgreSQL.");
+		if (action === "grant") {
+			// Support tool: credit tokens to an existing account without an order.
+			const parsed = z
+				.object({
+					email: z.string().email(),
+					tokens: z.number().int().min(1).max(1_000_000),
+					verify: z.boolean().default(false),
+					note: z.string().max(2000).default(""),
+				})
+				.safeParse(await req.json().catch(() => null));
+			if (!parsed.success)
+				return NextResponse.json(
+					{ error: "Provide a valid email and a positive token amount." },
+					{ status: 400 },
+				);
+			const { email, tokens, verify, note } = parsed.data;
+			const target = (
+				await pool.query(
+					"SELECT id,email,tokens,email_verified FROM users WHERE lower(email)=lower($1)",
+					[email],
+				)
+			).rows[0];
+			if (!target)
+				return NextResponse.json(
+					{ error: "No account with that email." },
+					{ status: 404 },
+				);
+			const client = await (pool as any).connect();
+			try {
+				await client.query("BEGIN");
+				if (verify)
+					await client.query(
+						"UPDATE users SET email_verified=true WHERE id=$1",
+						[target.id],
+					);
+				const reason = `Manual grant by ${admin.email}`;
+				await grantTokens(client, target.id, tokens, reason);
+				await client.query(
+					"INSERT INTO token_transactions (id,user_id,amount,reason) VALUES ($1,$2,$3,$4)",
+					[randomUUID(), target.id, tokens, reason],
+				);
+				await audit(client, null, admin.email, "account.granted", {
+					email: target.email,
+					tokens,
+					verified: verify,
+					note,
+				});
+				await client.query("COMMIT");
+				const fresh = (
+					await pool.query("SELECT tokens FROM users WHERE id=$1", [target.id])
+				).rows[0];
+				return NextResponse.json({
+					granted: tokens,
+					email: target.email,
+					verified: verify || Boolean(target.email_verified),
+					tokens: Number(fresh?.tokens ?? 0),
+				});
+			} catch (e) {
+				await client.query("ROLLBACK");
+				throw e;
+			} finally {
+				client.release();
+			}
+		}
 		if (action === "payment") {
 			const parsed = paymentSchema.safeParse(await req.json().catch(() => null));
 			if (!parsed.success) return NextResponse.json({ error: "Complete all payment fields, including the match basis." }, { status: 400 });
