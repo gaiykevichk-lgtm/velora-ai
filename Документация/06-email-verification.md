@@ -1,8 +1,6 @@
 # Подтверждение почты (email verification)
 
-Статус: реализовано в коде, проверено локально (`npm test` 23/23,
-ручной e2e: регистрация → 403 до подтверждения → переход по ссылке →
-успешный вход). Продакшен-отправка писем требует SMTP-настроек.
+Статус: механизм подтверждения реализован. Доставка настроена в коде на Resend SMTP; для production нужно добавить API key в окружение хостинга и подтвердить домен отправителя.
 
 ## Как работает
 
@@ -28,13 +26,15 @@
 
 | Переменная | Назначение |
 |---|---|
-| `SMTP_HOST` | SMTP-сервер (без него письма только логируются) |
-| `SMTP_PORT` | Порт, по умолчанию `587` (STARTTLS) |
-| `SMTP_USER` / `SMTP_PASSWORD` | AUTH LOGIN (опционально, если сервер требует) |
+| `RESEND_API_KEY` | API key Resend; передаётся как SMTP-пароль, только серверная переменная |
+| `SMTP_HOST` | По умолчанию `smtp.resend.com` |
+| `SMTP_PORT` | По умолчанию `587` (STARTTLS) |
+| `SMTP_USER` | По умолчанию `resend` |
+| `SMTP_PASSWORD` | Резервный вариант вместо `RESEND_API_KEY` |
 | `SMTP_FROM` | Например `Velora <no-reply@veloraai.pro>` |
 | `APP_BASE_URL` | Базовый URL для ссылки, например `https://veloraai.pro` |
 
-## Поведение без SMTP
+## Поведение без ключа Resend
 
 Регистрация работает, но письмо не уходит: ссылка пишется в серверный
 лог (`[verify] SMTP not configured...`), в dev-ответе API возвращается
@@ -53,8 +53,7 @@
 
 ## Что осталось для продакшена
 
-1. Заполнить SMTP-переменные (`SMTP_HOST/USER/PASSWORD/FROM`,
-   `APP_BASE_URL`) на хостинге — без этого письма не доставляются.
+1. Добавить `RESEND_API_KEY` в переменные окружения Render и подтвердить домен `veloraai.pro` в Resend. Отправитель задан как `Velora <no-reply@veloraai.pro>`; базовый URL подтверждения — `https://veloraai.pro`.
 2. Запушить `main` в GitHub (sandbox без credentials — push не удался:
    `could not read Username for 'https://github.com'`), чтобы Render
    с `autoDeploy: true` подхватил изменения, либо деплой вручную.

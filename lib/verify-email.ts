@@ -1,4 +1,4 @@
-// Email verification delivery over plain SMTP (no new dependencies).
+// Email verification delivery through Resend's SMTP endpoint (no new dependencies).
 // Configuration (all server-side, never NEXT_PUBLIC_*):
 //   SMTP_HOST, SMTP_PORT (default 587), SMTP_USER, SMTP_PASSWORD,
 //   SMTP_FROM (e.g. "Velora <no-reply@veloraai.pro>"),
@@ -10,15 +10,15 @@ import { connect, type Socket } from "node:net";
 import { connect as connectTls } from "node:tls";
 
 export function verificationConfig() {
-	const host = process.env.SMTP_HOST?.trim();
+	const host = (process.env.SMTP_HOST?.trim() || "smtp.resend.com");
 	const from = process.env.SMTP_FROM?.trim();
 	const base = (process.env.APP_BASE_URL ?? "").trim().replace(/\/$/, "");
 	if (!host || !from || !base) return null;
 	return {
 		host,
 		port: Number(process.env.SMTP_PORT ?? "587") || 587,
-		user: process.env.SMTP_USER?.trim() ?? "",
-		pass: process.env.SMTP_PASSWORD ?? "",
+		user: process.env.SMTP_USER?.trim() || "resend",
+		pass: process.env.RESEND_API_KEY?.trim() || process.env.SMTP_PASSWORD || "",
 		from,
 		base,
 	};
