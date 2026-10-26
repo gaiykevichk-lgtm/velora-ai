@@ -29,3 +29,10 @@ The first public site and workspace UI and API routes are implemented. `/` is a 
 
 ## AI photography showcase
 Added eight original 2K AI-generated photographs via Promto (Gemini 3.1 Flash Image Preview). Four appear on the homepage; all eight are available on `/examples`. Images are served from permanent Promto asset CDN URLs and optimized by Next Image with bounded remote patterns and responsive sizes. Original generation files remain at their canonical workspace paths. Labels distinguish these examples from studio provider output. This update changes showcase media only, not provider credentials, billing or database behavior.
+
+## Provider gateway key in production (verified 2026-10-26)
+All three generation keys (`TEXT_API_KEY`, `IMAGE_API_KEY`, `VIDEO_API_KEY`) hold one Promto gateway key, configured only as Render environment variables (service `srv-db58ik7lk1mc73943fb0`) and in the gitignored local `.env`; the value is never written to the repository. Endpoint is `https://api.promto.ai/v1`; models are unchanged: `google/gemini-3.8-flash` (text), `qwen/qwen-image-3-pro` (image), `minimax/hailuo-3` (video).
+
+Checks against the gateway with this key: `/v1/models` 200; `POST /v1/images/generations` 200 (including `openai/gpt-image-2.5-sunburst`); `POST /v1/chat/completions` 200; `POST /v1/videos` authorises the key (unknown model → 400, not 401). The full in-app path was exercised with `VELORA_TEST_DB=memory` and the same key: registration → email verification → bank order €20 → admin payment + credit → 2 000 tokens → `POST /api/runs` (image) → **201**, run `completed`, result `data:image/png;base64,…`, 25 tokens charged, balance 1 975.
+
+Token deduction in `lib/tokens.ts` now casts its parameters (`tokens - $1::int`, `remaining - $2::int`) so the integer arithmetic and the `CHECK (remaining >= 0)` constraint hold in the `pg-mem` test double; PostgreSQL semantics are unchanged. Switching the image model to `openai/gpt-image-2.5-sunburst` is a single `IMAGE_MODEL` change plus the model string in `tests/contracts.test.mjs`.
