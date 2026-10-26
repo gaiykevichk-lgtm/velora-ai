@@ -37,7 +37,9 @@ export function mailFrom() {
 export function mailConfigured() {
 	if (!mailFrom()) return false;
 	if (process.env.RESEND_API_KEY?.trim()) return true;
-	return verificationConfig() !== null;
+	const cfg = verificationConfig();
+	// A host and sender alone cannot deliver: credentials are required.
+	return Boolean(cfg && cfg.pass);
 }
 
 export function isSmtpConfigured() {

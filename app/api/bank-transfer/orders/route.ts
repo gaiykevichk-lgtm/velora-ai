@@ -6,7 +6,7 @@ import { z } from "zod";
 import { user } from "@/lib/auth";
 import { adminUser } from "@/lib/admin";
 import { dbAsync } from "@/lib/db";
-import { failure, unauthorized } from "@/lib/api";
+import { failure, originAllowed, unauthorized } from "@/lib/api";
 import {
 	BANK_MAX_EUR,
 	BANK_MIN_EUR,
@@ -133,7 +133,9 @@ export async function POST(req: NextRequest) {
 				},
 				{ status: 403 },
 			);
-		if (req.headers.get("origin") !== new URL(process.env.APP_BASE_URL!).origin)
+		if (
+			!originAllowed(req, new URL(process.env.APP_BASE_URL!).origin)
+		)
 			return NextResponse.json(
 				{ error: "Invalid request origin." },
 				{ status: 403 },

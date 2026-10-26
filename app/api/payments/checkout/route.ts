@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { user } from "@/lib/auth";
 import { dbAsync } from "@/lib/db";
-import { failure, unauthorized } from "@/lib/api";
+import { failure, originAllowed, unauthorized } from "@/lib/api";
 import { TOKEN_PACKAGES } from "@/lib/commerce";
 import { paymentConfig, type PaymentOrder } from "@/lib/payments";
 import { infiniRequest, trustedCheckoutUrl } from "@/lib/infini.mjs";
@@ -15,7 +15,7 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
 	try {
 		const config = paymentConfig();
-		if (req.headers.get("origin") !== config.appOrigin)
+		if (!originAllowed(req, config.appOrigin))
 			return NextResponse.json(
 				{ error: "Invalid request origin." },
 				{ status: 403 },
