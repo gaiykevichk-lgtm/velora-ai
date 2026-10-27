@@ -506,6 +506,7 @@ export function Workspace() {
 	const [spaces, setSpaces] = useState<Space[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [runs, setRuns] = useState<Run[]>([]);
+	const [historyLoading, setHistoryLoading] = useState(false);
 	const [prompt, setPrompt] = useState(
 		searchParams.get("prompt")?.slice(0, 8000) ?? "",
 	);
@@ -602,6 +603,40 @@ export function Workspace() {
 			setError((e as Error).message);
 		}
 	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const data = await request<{ user: Account | null }>("/api/auth");
+				if (cancelled || !data.user) return;
+				setAccount(data.user);
+				if (typeof data.user.tokens === "number") setTokens(data.user.tokens);
+				await loadSpaces();
+			} catch {
+				if (!cancelled) setError("Could not restore your session. Please try again.");
+			}
+		})();
+		return () => { cancelled = true; };
+	}, [loadSpaces]);
+
+	useEffect(() => {
+		if (!activeId || !account) { setRuns([]); return; }
+		const controller = new AbortController();
+		setRuns([]);
+		setHistoryLoading(true);
+		(async () => {
+			try {
+				const data = await request<{ runs: Run[] }>(`/api/runs?workspaceId=${encodeURIComponent(activeId)}`, { signal: controller.signal });
+				if (!controller.signal.aborted) setRuns(data.runs);
+			} catch {
+				if (!controller.signal.aborted) setError("Could not load this project's history. Please try again.");
+			} finally {
+				if (!controller.signal.aborted) setHistoryLoading(false);
+			}
+		})();
+		return () => controller.abort();
+	}, [activeId, account]);
 
 	const refreshTokens = useCallback(async () => {
 		try {
@@ -1191,7 +1226,7 @@ export function Workspace() {
 							</div>
 						) : (
 							<button
-								onClick={() => setAuthOpen(true)}
+								onClick={() => { setAuthMode("login"); setAuthOpen(true); }}
 								className="text-xs font-bold text-[#ffe4a6] hover:text-white flex items-center gap-1"
 							>
 								Sign In <ArrowUpRight size={13} />
@@ -1353,6 +1388,7 @@ export function Workspace() {
 						</div>
 
 						{/* Generation history / results */}
+						{historyLoading && <p role="status" className="mb-4 text-sm text-[#d0c6b4]">Loading project history…</p>}
 						{runs.length > 0 && (
 							<div className="mb-12">
 								<h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
