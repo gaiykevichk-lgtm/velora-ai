@@ -195,7 +195,12 @@ export async function POST(req: NextRequest) {
 					await pool.query("INSERT INTO bank_mail_log (order_id,to_email,subject,body,message_id,state,error) VALUES ($1,$2,$3,$4,$5,$6,'') ON CONFLICT (order_id) DO UPDATE SET subject=$3,body=$4,message_id=$5,state=$6,sent_at=now()", [parsed.data.orderId, order.email, `Tokens credited for order ${order.public_number}`, `Order ${order.public_number} is paid.`, result.sent ? result.messageId : "", result.sent ? "sent-credit" : "logged-no-smtp"]);
 				} catch (e) { await audit(pool, parsed.data.orderId, admin.email, "mail.failed", { error: (e as Error).message.slice(0, 300) }); }
 				return NextResponse.json({ credited: true });
-			} catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
+			} catch (e) {
+				await client.query("ROLLBACK");
+				const status = (e as { status?: number }).status;
+				if (status) return NextResponse.json({ error: (e as Error).message }, { status });
+				throw e;
+			} finally { client.release(); }
 		}
 		if (action === "mark") {
 			const parsed = z.object({ orderId: z.string().uuid(), status: z.enum(["review", "reported", "cancelled"]), note: z.string().max(2000).default("") }).safeParse(await req.json().catch(() => null));
