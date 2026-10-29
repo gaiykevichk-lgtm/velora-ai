@@ -59,7 +59,7 @@ function docPdf(
 		`Order: ${order.public_number}, confirmed ${new Date(order.confirmed_at).toISOString()}`,
 		`Prepaid package of ${Number(order.tokens).toLocaleString("en-US")} tokens for Velora AI services, ${order.eur_amount} EUR.`,
 		`Recipient: ${cfg.seller.legalName}, IBAN ${cfg.seller.iban}, BIC ${cfg.seller.bic}, ${cfg.seller.bank}.`,
-		`Payment reference: Payment under invoice ${order.invoice_number ?? order.public_number}.`,
+		`Payment reference: Invoice ${order.invoice_number ?? order.public_number}.`,
 		`Currency: EUR. Amount: ${Number(order.eur_amount).toFixed(2)} EUR.`,
 		`Validity: ${cfg.validityMonths} months from crediting. Credit after receipt within ${cfg.creditDays} business days.`,
 		`Terms ${order.terms_version}. Tokens are service usage units, not money and not transferable.`,
@@ -354,7 +354,7 @@ export async function GET(req: NextRequest) {
 		if (!admin) {
 			if (id) {
 				const { rows } = await pool.query(
-					"SELECT o.id,o.public_number,o.eur_amount,o.tokens,o.status,o.confirmed_at,o.buyer,o.seller,o.description,o.terms_version,(SELECT doc_number FROM bank_order_documents d WHERE d.order_id=o.id AND d.kind='invoice' ORDER BY d.created_at LIMIT 1) AS invoice_number FROM bank_orders o WHERE o.id=$1 AND o.user_id=$2",
+					"SELECT o.id,o.public_number,o.eur_amount,o.tokens,o.status,o.confirmed_at,o.buyer,o.seller,o.description,o.terms_version FROM bank_orders o WHERE o.id=$1 AND o.user_id=$2",
 					[id, account.id],
 				);
 				if (!rows[0])
@@ -362,9 +362,27 @@ export async function GET(req: NextRequest) {
 						{ error: "Order not found." },
 						{ status: 404 },
 					);
-				return NextResponse.json({ order: rows[0] });
+				const inv = await pool.query(
+					"SELECT id,doc_number FROM bank_order_documents WHERE order_id=$1 AND kind='invoice' ORDER BY created_at LIMIT 1",
+					[id],
+				);
+				return NextResponse.json({
+					order: {
+						...rows[0],
+						invoice_number: inv.rows[0]?.doc_number ?? null,
+						invoice_doc_id: inv.rows[0]?.id ?? null,
+					},
+				});
 			}
-			const { rows } = await pool.query(mine, [account.id]);
+			const { rows: baseRows } = await pool.query(mine, [account.id]);
+			const invoices = await pool.query(
+				"SELECT d.id,d.order_id,d.doc_number FROM bank_order_documents d JOIN bank_orders o ON o.id=d.order_id WHERE o.user_id=$1 AND d.kind='invoice' ORDER BY d.created_at",
+				[account.id],
+			);
+			const rows = baseRows.map((r: any) => {
+				const d = invoices.rows.find((x: any) => x.order_id === r.id);
+				return { ...r, invoice_number: d?.doc_number ?? null, invoice_doc_id: d?.id ?? null };
+			});
 			const profile = await pool.query(
 				"SELECT profile FROM bank_buyers WHERE user_id=$1",
 				[account.id],

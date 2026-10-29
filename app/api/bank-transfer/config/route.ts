@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest) {
 		// commercial conditions advertised on the site.
 		let validityMonths = 12;
 		let creditDays = 2;
-		let termsVersion = "2026-10-26-v1";
+		let termsVersion = "2026-10-29-v1";
 		let seller: Record<string, string> = {
 			legalName: "",
 			bank: "",
@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest) {
 				Number(process.env.BANK_TOKEN_VALIDITY_MONTHS ?? "12") || 12;
 			creditDays =
 				Number(process.env.BANK_CREDIT_DAYS_AFTER_RECEIPT ?? "2") || 2;
-			termsVersion = process.env.BANK_TERMS_VERSION?.trim() || "2026-10-26-v1";
+			termsVersion = process.env.BANK_TERMS_VERSION?.trim() || "2026-10-29-v1";
 		}
 		return NextResponse.json(
 			{

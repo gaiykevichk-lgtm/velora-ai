@@ -35,6 +35,25 @@ type BankBuyer = {
 	country: string;
 	address: string;
 };
+const BANK_STATUS: Record<string, string> = {
+	awaiting_payment: "Awaiting payment",
+	confirmed: "Awaiting payment",
+	partial: "Partial payment — under review",
+	review: "Payment under review",
+	reported: "Payment reported — being verified",
+	credited: "Paid",
+	cancelled: "Cancelled",
+	refunded: "Refunded",
+};
+const ONLINE_STATUS: Record<string, string> = {
+	creating: "Preparing",
+	pending: "Awaiting payment",
+	processing: "Payment processing",
+	partial_paid: "Partially paid",
+	credited: "Paid",
+	expired: "Expired",
+	review: "Under review",
+};
 function currency(n: number) {
 	return `\u20ac${Number(n).toLocaleString("en-US")}`;
 }
@@ -158,12 +177,14 @@ function BankOrderDetails({ id }: { id: string }) {
 			<div className="mt-1">Bank address: {s.address ?? "—"}</div>
 			<div className="mt-1">Currency: EUR</div>
 			<div className="mt-1">
-				Amount: €{Number(o.eur_amount).toLocaleString("en-US")}
+				Amount: €{Number(o.eur_amount).toLocaleString("en-US")}{" "}
+				<CopyInline text={Number(o.eur_amount).toFixed(2)} /> ·{" "}
+				{Number(o.tokens).toLocaleString("en-US")} tokens
 			</div>
 			<div className="mt-1">
 				Payment reference:{" "}
 				<CopyInline
-					text={`Payment under invoice ${String(o.invoice_number ?? o.public_number)}`}
+					text={`Invoice ${String(o.invoice_number ?? o.public_number)}`}
 				/>
 			</div>
 			<div className="mt-1">
@@ -174,8 +195,18 @@ function BankOrderDetails({ id }: { id: string }) {
 				· {b.country ?? ""}
 			</div>
 			<div className="mt-1">
-				Status: {o.status} · confirmed{" "}
+				Status: {BANK_STATUS[o.status] ?? o.status} · ordered{" "}
 				{o.confirmed_at ? new Date(o.confirmed_at).toLocaleString() : "—"}
+			</div>
+			<div className="mt-2 flex flex-wrap gap-3">
+				<a className="underline" href={`/api/bank-transfer/documents?kind=requisites&orderId=${o.id}`}>
+					Download payment details (PDF)
+				</a>
+				{o.invoice_doc_id ? (
+					<a className="underline" href={`/api/bank-transfer/documents?kind=document&doc=${o.invoice_doc_id}`}>
+						Download invoice (PDF)
+					</a>
+				) : null}
 			</div>
 		</div>
 	);
@@ -519,6 +550,7 @@ export function Workspace() {
 	const [runs, setRuns] = useState<Run[]>([]);
 	const [historyLoading, setHistoryLoading] = useState(false);
 	const [reserved, setReserved] = useState(0);
+	const [lots, setLots] = useState<{ remaining: number; expires_at: string; source: string }[]>([]);
 	const [prompt, setPrompt] = useState(
 		searchParams.get("prompt")?.slice(0, 8000) ?? "",
 	);
@@ -561,6 +593,7 @@ export function Workspace() {
 		address: "",
 	});
 	const [bankAccepted, setBankAccepted] = useState(false);
+	const [openBankOrder, setOpenBankOrder] = useState("");
 	const [bankOrder, setBankOrder] = useState<null | {
 		id: string;
 		publicNumber: string;
@@ -685,7 +718,8 @@ export function Workspace() {
 
 	const refreshTokens = useCallback(async () => {
 		try {
-			const data = await request<{ tokens: number; reserved?: number }>("/api/tokens");
+			const data = await request<{ tokens: number; reserved?: number; lots?: { remaining: number; expires_at: string; source: string }[] }>("/api/tokens");
+			if (data.lots) setLots(data.lots);
 			if (typeof data.reserved === "number") setReserved(data.reserved);
 			setTokens(data.tokens);
 		} catch {
@@ -727,8 +761,11 @@ export function Workspace() {
 		}
 	}, []);
 	useEffect(() => {
-		if (topupOpen && account) void refreshBank();
-	}, [topupOpen, account, refreshBank]);
+		if (topupOpen && account) {
+			void refreshBank();
+			void refreshTokens();
+		}
+	}, [topupOpen, account, refreshBank, refreshTokens]);
 	useEffect(() => {
 		if (bankProfile && !bankOrder)
 			setBankBuyer({
@@ -1657,6 +1694,58 @@ export function Workspace() {
 								made — use the bank transfer order below.
 							</p>
 						)}
+						{account && lots.length > 0 && (
+							<div className="mt-4 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4 text-xs text-[#d0c6b4]">
+								<div className="font-bold uppercase text-[#8a7e6f]">Token expiry by purchase</div>
+								{lots.map((l, i) => (
+									<div key={i} className="mt-1">
+										{Number(l.remaining).toLocaleString("en-US")} tokens ({l.source.replace(/ [0-9a-f-]{36}$/, "")}) valid until {new Date(l.expires_at).toLocaleDateString("en-GB")}
+									</div>
+								))}
+							</div>
+						)}
+						{account && (
+							<div className="mt-4 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4 text-xs text-[#d0c6b4]">
+								<div className="font-bold uppercase text-[#8a7e6f]">Payment history</div>
+								{paymentOrders.length + bankOrders.length === 0 ? (
+									<p className="mt-2">No payments yet.</p>
+								) : (
+									<div className="mt-2 overflow-x-auto">
+										<table className="w-full text-left">
+											<thead>
+												<tr className="text-[#8a7e6f]">
+													<th className="pr-3">Date</th>
+													<th className="pr-3">Order / invoice</th>
+													<th className="pr-3">Amount</th>
+													<th className="pr-3">Tokens</th>
+													<th className="pr-3">Method</th>
+													<th className="pr-3">Status</th>
+													<th>Document</th>
+												</tr>
+											</thead>
+											<tbody>
+												{[
+													...bankOrders.map((o: any) => ({ key: o.id, date: o.confirmed_at, ref: o.invoice_number ? `${o.public_number} / ${o.invoice_number}` : o.public_number, eur: o.eur_amount, tokens: o.tokens, method: "Bank transfer", status: BANK_STATUS[o.status] ?? o.status, doc: o.invoice_doc_id ? `/api/bank-transfer/documents?kind=document&doc=${o.invoice_doc_id}` : `/api/bank-transfer/documents?kind=requisites&orderId=${o.id}`, docLabel: o.invoice_doc_id ? "Invoice PDF" : "Payment details" })),
+													...paymentOrders.map((o) => ({ key: o.id, date: (o as any).created_at, ref: o.id.slice(0, 8), eur: o.eur_amount, tokens: o.tokens, method: "Card (Infini)", status: ONLINE_STATUS[o.status] ?? o.status, doc: o.status === "credited" ? `/api/payments/invoice?orderId=${o.id}` : "", docLabel: "Invoice PDF" })),
+												]
+													.sort((a, b) => +new Date(b.date) - +new Date(a.date))
+													.map((r) => (
+														<tr key={r.key} className="border-t border-[#2a1c10]">
+															<td className="pr-3 py-1">{r.date ? new Date(r.date).toLocaleDateString("en-GB") : "—"}</td>
+															<td className="pr-3">{r.ref}</td>
+															<td className="pr-3">€{r.eur} EUR</td>
+															<td className="pr-3">{Number(r.tokens).toLocaleString("en-US")}</td>
+															<td className="pr-3">{r.method}</td>
+															<td className="pr-3">{r.status}</td>
+															<td>{r.doc ? <a className="underline" href={r.doc}>{r.docLabel}</a> : "—"}</td>
+														</tr>
+													))}
+											</tbody>
+										</table>
+									</div>
+								)}
+							</div>
+						)}
 						<div className="mt-4 text-sm text-[#b8ac90]">
 							<p>Online payment orders</p>
 							{paymentOrders.length === 0 && (
@@ -1678,6 +1767,11 @@ export function Workspace() {
 										>
 											Check payment status
 										</button>
+									)}
+									{o.status === "credited" && (
+										<a className="block mt-2 underline" href={`/api/payments/invoice?orderId=${o.id}`}>
+											Download invoice (PDF)
+										</a>
 									)}
 									{o.status === "credited" && (
 										<button
@@ -1875,7 +1969,15 @@ export function Workspace() {
 											<span className="font-bold text-white">
 												{o.public_number}
 											</span>{" "}
-											· €{o.eur_amount} · {o.status}
+											· €{o.eur_amount} · {BANK_STATUS[o.status] ?? o.status}
+											<button
+												type="button"
+												className="ml-2 underline"
+												onClick={() => setOpenBankOrder(openBankOrder === o.id ? "" : o.id)}
+											>
+												{openBankOrder === o.id ? "Hide details" : "Payment details"}
+											</button>
+											{openBankOrder === o.id ? <BankDetailsLink id={o.id} /> : null}
 											{isAdmin ? (
 												<button
 													type="button"

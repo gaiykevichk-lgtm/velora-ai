@@ -18,7 +18,12 @@ export async function GET() {
 			"SELECT id, amount, reason, created_at FROM token_transactions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
 			[account.id],
 		);
+		const lots = await pool.query(
+			"SELECT tokens,remaining,expires_at,source,created_at FROM token_lots WHERE user_id=$1 AND remaining>0 ORDER BY expires_at ASC LIMIT 50",
+			[account.id],
+		);
 		return NextResponse.json({
+			lots: lots.rows,
 			tokens: balance.tokens,
 			reserved: await reservedTokens(pool, account.id),
 			tokensExpireAt: balance.expiresAt,

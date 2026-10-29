@@ -117,14 +117,29 @@ export function ContactForm() {
 				<a href={`mailto:${COMPANY.email}`}>{COMPANY.email} ↗</a>
 			</div>
 			<form
-				onSubmit={(e) => {
+				onSubmit={async (e) => {
 					e.preventDefault();
-					const data = new FormData(e.currentTarget);
-					const body = `Name: ${data.get("name")}\nPhone: ${data.get("phone")}\nEmail: ${data.get("email")}\n\n${data.get("comment")}`;
-					window.location.href = `mailto:${COMPANY.email}?subject=${encodeURIComponent("Velora AI enquiry")}&body=${encodeURIComponent(body)}`;
-					setStatus(
-						"Your email application has been opened. The message has not been sent by this website.",
-					);
+					const form = e.currentTarget;
+					const data = new FormData(form);
+					setStatus("Sending…");
+					try {
+						const phone = String(data.get("phone") ?? "").trim();
+						const r = await fetch("/api/contact", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({
+								name: data.get("name"),
+								email: data.get("email"),
+								message: `${phone ? `Phone: ${phone}\n\n` : ""}${data.get("comment")}`,
+							}),
+						});
+						const body = await r.json().catch(() => ({}));
+						if (!r.ok) throw new Error(body.error || "Your message could not be sent.");
+						form.reset();
+						setStatus("Thank you. Your message has been sent; we will reply by email.");
+					} catch (err) {
+						setStatus((err as Error).message);
+					}
 				}}
 			>
 				<label>
@@ -150,8 +165,8 @@ export function ContactForm() {
 					<textarea name="comment" required maxLength={4000} rows={4} />
 				</label>
 				<p className="v-small">
-					This form opens your email app; direct website delivery is not
-					connected yet. See our <a href="/privacy-policy">Privacy Policy</a>.
+					Your message is sent to Omnix21 by email. See our{" "}
+					<a href="/privacy-policy">Privacy Policy</a>.
 				</p>
 				<button className="v-button" type="submit">
 					Send ↗

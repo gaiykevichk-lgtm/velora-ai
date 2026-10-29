@@ -69,7 +69,7 @@ test("order mail carries reference, exact amount and credit window", () => {
 		"https://veloraai.pro",
 	);
 	assert.ok(
-		body.includes("Payment reference: Payment under invoice INV-2026-000123") &&
+		body.includes("Payment reference: Invoice INV-2026-000123") &&
 			body.includes("20 EUR") &&
 			body.includes("2,000") &&
 			body.includes("2 business days"),

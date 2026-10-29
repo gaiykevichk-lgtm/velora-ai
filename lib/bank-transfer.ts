@@ -15,7 +15,7 @@ export const FINAL_BANK_TERMS_TEXT =
 	"and the buyer is identified by the payment reference. Credited tokens are valid for 12 months from the credit date. " +
 	"Tokens are platform usage units: they are not money, cannot be transferred or withdrawn, and do not create a subscription. " +
 	"Mandatory French and EU consumer rights, including the statutory 14-day withdrawal right for distance purchases, are not limited by these terms. " +
-	"Unused tokens can be refunded to the original paying account within 14 days of credit; after that period unused tokens remain usable for the full validity period. " +
+	"Unused tokens can be refunded to the original paying account within 30 calendar days of purchase; after that period unused tokens remain usable for the full validity period. " +
 	"The seller is Omnix21, 47 rue Vivienne, 75002 Paris, France (107 643 348 R.C.S. Paris).";
 
 export function bankConfig() {
@@ -30,7 +30,7 @@ export function bankConfig() {
 		address: process.env.BANK_SELLER_ADDRESS?.trim() ?? "",
 	};
 	const termsVersion =
-		process.env.BANK_TERMS_VERSION?.trim() || "2026-10-26-v1";
+		process.env.BANK_TERMS_VERSION?.trim() || "2026-10-29-v1";
 	const termsText =
 		process.env.BANK_TERMS_TEXT?.trim() || FINAL_BANK_TERMS_TEXT;
 	const validityMonths = Number(process.env.BANK_TOKEN_VALIDITY_MONTHS ?? "12");
@@ -175,7 +175,7 @@ export function mailText(
 		`Prepaid package of ${order.tokens.toLocaleString("en-US")} tokens for Velora AI services, ${order.eur} EUR.`,
 		`Recipient: ${order.seller.legalName}, IBAN ${order.seller.iban}, BIC ${order.seller.bic}, ${order.seller.bank}.`,
 		`Bank address: ${order.seller.address ?? ""}. Currency: EUR. Amount: ${order.eur.toFixed(2)} EUR.`,
-		`Payment reference: Payment under invoice ${order.invoiceNumber ?? order.publicNumber}. Transfer the exact amount from the buyer account.`,
+		`Payment reference: Invoice ${order.invoiceNumber ?? order.publicNumber}. Transfer the exact amount from the buyer account.`,
 		`Tokens are usage units of the service; this is not an order for specific videos or images. Tokens are credited after receipt, within ${order.creditDays} business days of arrival.`,
 		`Manage the order: ${origin}/studio?topup=open&bankOrder=${order.publicNumber}`,
 	].join("\n");

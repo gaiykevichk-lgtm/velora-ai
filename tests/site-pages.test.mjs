@@ -22,8 +22,8 @@ test('packages are EUR prepaid only and registration has no free credits',()=>{
 test('legal pages are final published terms, not drafts',()=>{
  const s=source('app/site-content.tsx');
  assert.doesNotMatch(s,/Release draft|draft|must be confirmed|pending implementation|will be confirmed/i);
- assert.match(s,/CNIL/);assert.match(s,/withdrawal|14 days/);assert.match(s,/refund/i);
+ assert.match(s,/CNIL/);assert.match(s,/30 calendar days/);assert.doesNotMatch(s,/14 days of the credit/);assert.match(s,/refund/i);
  assert.match(s,/12 months/);
  assert.match(source('app/api/tokens/route.ts'),/expiryTrackingEnabled: true/);
- assert.match(source('app/public-controls.tsx'),/message has not been sent/);
+ assert.match(source('app/public-controls.tsx'),/\/api\/contact/);assert.doesNotMatch(source('app/public-controls.tsx'),/mailto:\$\{COMPANY\.email\}\?subject/);assert.match(s,/mentions-legales/)
 });

@@ -24,7 +24,7 @@ const schema = z.object({
 	acceptTerms: z.boolean().optional(),
 	marketing: z.boolean().optional(),
 });
-const TERMS_VERSION = process.env.TERMS_VERSION?.trim() || "2026-10-26-v1";
+const TERMS_VERSION = process.env.TERMS_VERSION?.trim() || "2026-10-29-v1";
 export async function GET() {
 	try {
 		return NextResponse.json({ user: await user() });

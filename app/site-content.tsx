@@ -73,7 +73,7 @@ export const faq = [
 	],
 	[
 		"Can I get a refund for unused tokens?",
-		"Yes, under the conditions below. Within 14 days of the credit you can cancel the purchase and get the unused tokens refunded to the account you paid from. After those 14 days unused tokens stay valid until their own expiry date instead of being refunded, and used tokens are not refunded. Mandatory French and EU consumer rights, including remedies for non-conforming digital content, always apply.",
+		"Yes, under the conditions below. Within 30 calendar days of the purchase you can cancel the purchase and get the unused tokens refunded to the account you paid from. After those 30 days unused tokens stay valid until their own expiry date instead of being refunded, and used tokens are not refunded. Mandatory French and EU consumer rights, including remedies for non-conforming digital content, always apply.",
 	],
 	[
 		"Are tokens transferable between accounts?",
@@ -112,7 +112,7 @@ const terms = [
 	],
 	[
 		"7. Withdrawal, refunds and conformity",
-		"You may cancel a token purchase within 14 days of the credit date and receive a refund of the unused tokens to the account you paid from; write to us from the account email and the refund is executed within 14 days of the request. After that period, unused tokens remain usable until their expiry date and are not refunded in cash; tokens already spent on generations are not refunded. Nothing here limits mandatory French or EU consumer rights, including statutory remedies for non-conforming digital content or services, or your right to withdraw where applicable law does not allow a waiver.",
+		"You may cancel a token purchase within 30 calendar days of the purchase and receive a refund of the unused tokens to the account you paid from; write to us from the account email and the refund is executed within 14 days of the request. After that period, unused tokens remain usable until their expiry date and are not refunded in cash; tokens already spent on generations are not refunded. Nothing here limits mandatory French or EU consumer rights, including statutory remedies for non-conforming digital content or services, or your right to withdraw where applicable law does not allow a waiver.",
 	],
 	[
 		"8. Lawful use and intellectual property",
@@ -136,7 +136,7 @@ const terms = [
 const privacy = [
 	[
 		"1. Controller",
-		`The data controller is ${COMPANY.name}, registration number ${COMPANY.registration}, registered address ${COMPANY.address}, France. Contact for any privacy request: ${COMPANY.email}. ${COMPANY.name} operates Velora AI at veloraai.pro.`,
+		`The data controller is ${COMPANY.name}, registration number ${COMPANY.registration}, registered address ${COMPANY.address}. Contact for any privacy request: ${COMPANY.email}. ${COMPANY.name} operates Velora AI at veloraai.pro.`,
 	],
 	[
 		"2. Data we process",
@@ -160,7 +160,7 @@ const privacy = [
 	],
 	[
 		"7. Retention and security",
-		"Account data is kept while your account is active; purchase and invoice records are kept for the accounting period required by French law. Deletion requests are handled within one month through " +
+		"Account data, your prompts, settings and generated results (images, videos and text) are kept in our database while your account is active, and only you can open them while signed in. Purchase and invoice records are kept for the accounting period required by French law. Deletion requests are handled within one month through " +
 			`${COMPANY.email}. Passwords are stored as salted scrypt hashes, session tokens as SHA-256 hashes, and connections are encrypted in transit. No system is absolutely secure, so choose a strong unique password.`,
 	],
 	[
@@ -176,7 +176,8 @@ export type SitePage =
 	| "contacts"
 	| "faq"
 	| "terms-and-conditions"
-	| "privacy-policy";
+	| "privacy-policy"
+	| "mentions-legales";
 type Page = { title: string; lead: string; blocks: string[][] };
 export const pages: Record<SitePage, Page> = {
 	about: {
@@ -216,7 +217,7 @@ export const pages: Record<SitePage, Page> = {
 			],
 			[
 				"Deposit and refunds",
-				"Card payments are credited as soon as Infini verifies them; bank transfers are credited within 2 business days after receipt. Unused tokens can be refunded to the paying account within 14 days of the credit; after that they stay usable until their expiry date. Mandatory consumer rights always apply.",
+				"Card payments are credited as soon as Infini verifies them; bank transfers are credited within 2 business days after receipt. Unused tokens can be refunded to the paying account within 30 calendar days of the purchase; after that they stay usable until their expiry date. Mandatory consumer rights always apply.",
 			],
 			[
 				"Platform-only tokens",
@@ -244,12 +245,22 @@ export const pages: Record<SitePage, Page> = {
 	},
 	"terms-and-conditions": {
 		title: "Terms and Conditions",
-		lead: `Terms of sale and use of Velora AI, operated by ${COMPANY.name} (${COMPANY.registration}), France. Version 2026-10-26.`,
+		lead: `Terms of sale and use of Velora AI, operated by ${COMPANY.name} (${COMPANY.registration}), France. Version 2026-10-29.`,
 		blocks: terms,
+	},
+	"mentions-legales": {
+		title: "Mentions légales",
+		lead: `Legal notice of Velora AI (${COMPANY.platformUrl}), published in accordance with French law (LCEN, art. 6).`,
+		blocks: [
+			["Publisher", `${COMPANY.name}, registered in France under number ${COMPANY.registration}. Registered address: ${COMPANY.address}.`],
+			["Contact", `Email: ${COMPANY.email}. Phone: ${COMPANY.phone}. Support hours: ${COMPANY.supportHours}.`],
+			["Hosting", "The website and database are hosted by Render. Hosting company address: to be confirmed by the publisher."],
+			["Other required details", "Legal form, share capital, director of publication and VAT number: to be completed by the publisher."],
+		],
 	},
 	"privacy-policy": {
 		title: "Privacy Policy",
-		lead: "How Omnix21 processes personal data on Velora AI, under the GDPR and French data-protection law. Version 2026-10-26.",
+		lead: "How Omnix21 processes personal data on Velora AI, under the GDPR and French data-protection law. Version 2026-10-29.",
 		blocks: privacy,
 	},
 };
@@ -298,11 +309,12 @@ export function SiteFooter() {
 					<h3>Legal & Compliance</h3>
 					<Link href="/terms-and-conditions">Terms and Conditions</Link>
 					<Link href="/privacy-policy">Privacy Policy</Link>
+					<Link href="/mentions-legales">Mentions légales</Link>
 					<h3>Payments & Security</h3>
 					<p>
 						Card checkout via Infini and bank transfer (€2–€2,500). Tokens are
 						credited after the payment is verified. Unused tokens can be
-						refunded within 14 days of the credit.
+						refunded within 30 calendar days of the purchase.
 					</p>
 				</div>
 				<div>

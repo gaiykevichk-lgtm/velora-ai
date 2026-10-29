@@ -6,6 +6,7 @@ import { adminUser } from "@/lib/admin";
 import { dbAsync } from "@/lib/db";
 import { failure, unauthorized } from "@/lib/api";
 import { bankConfig, textPdf } from "@/lib/bank-transfer";
+import { COMPANY } from "@/lib/company";
 
 export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
@@ -26,13 +27,46 @@ export async function GET(req: NextRequest) {
 			const admin = await adminUser();
 			if (!admin && row.user_id !== account.id) return NextResponse.json({ error: "Not found." }, { status: 404 });
 			const b = row.buyer as Record<string, string>;
+			const sl = row.seller as Record<string, string>;
+			const buyerName = row.buyer.kind === "company" ? `${b.legalName}, reg. ${b.regNumber}` : b.fullName;
 			const pdf = textPdf(`${row.kind} ${row.doc_number}`, [
-				`${row.kind}: ${row.doc_number} (${new Date().toISOString().slice(0, 10)})`,
-				`Seller: ${(row.seller as any).legalName}, ${(row.seller as any).address}`,
-				`Buyer: ${row.buyer.kind === "company" ? `${b.legalName}, ${b.regNumber}` : b.fullName}, ${b.country}`,
-				`Order ${row.public_number}: ${Number(row.tokens).toLocaleString("en-US")} tokens, ${row.eur_amount} EUR. Terms ${row.terms_version}.`,
+				`${String(row.kind).toUpperCase()} ${row.doc_number}`,
+				`Date: ${new Date(row.confirmed_at).toISOString().slice(0, 10)}   Order: ${row.public_number}`,
+				`Seller: ${sl.legalName}, ${sl.address}`,
+				`Seller registration: ${COMPANY.registration}`,
+				`Buyer: ${buyerName}, ${b.country}`,
+				`Item: Prepaid Velora AI tokens (usage units for AI generation)`,
+				`Quantity: ${Number(row.tokens).toLocaleString("en-US")} tokens   Total: ${Number(row.eur_amount).toFixed(2)} EUR`,
+				`Tokens valid 12 months from the credit date. Terms version ${row.terms_version}.`,
+				`Tax: price shown is the total payable in EUR; tax details as stated by the seller on this document.`,
+				`Payment reference: Invoice ${row.doc_number}`,
+				`IBAN ${sl.iban}   BIC ${sl.bic}   Bank ${sl.bank}`,
 			]);
 			return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${row.kind}-${row.doc_number}.pdf"` } });
+		}
+		const orderParam = req.nextUrl.searchParams.get("orderId");
+		if (kind === "requisites" && orderParam) {
+			const o = (await pool.query(
+				"SELECT o.public_number,o.eur_amount,o.tokens,o.seller,o.buyer,o.user_id FROM bank_orders o WHERE o.id=$1",
+				[orderParam],
+			)).rows[0];
+			if (!o) return NextResponse.json({ error: "Order not found." }, { status: 404 });
+			const admin = await adminUser();
+			if (!admin && o.user_id !== account.id) return NextResponse.json({ error: "Not found." }, { status: 404 });
+			const sl = o.seller as Record<string, string>;
+			const invRow = (await pool.query("SELECT doc_number FROM bank_order_documents WHERE order_id=$1 AND kind='invoice' ORDER BY created_at LIMIT 1", [orderParam])).rows[0];
+			const inv = invRow?.doc_number ?? o.public_number;
+			const pdf = textPdf(`Payment details ${o.public_number}`, [
+				`Payment details for order ${o.public_number}`,
+				`Recipient: ${sl.legalName}`,
+				`IBAN: ${sl.iban}`,
+				`BIC: ${sl.bic}   Bank: ${sl.bank}`,
+				`Bank address: ${sl.address}`,
+				`Amount: ${Number(o.eur_amount).toFixed(2)} EUR (${Number(o.tokens).toLocaleString("en-US")} tokens)`,
+				`Payment reference: Invoice ${inv}`,
+				`Transfer the exact amount; tokens are credited after the receipt is confirmed.`,
+			]);
+			return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="payment-details-${o.public_number}.pdf"` } });
 		}
 		if (kind === "refund" && doc) {
 			const admin = await adminUser();
