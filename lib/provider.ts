@@ -178,7 +178,7 @@ export async function submitVideo(
 		model: process.env.VIDEO_MODEL,
 		prompt,
 		duration,
-		resolution: process.env.VIDEO_RESOLUTION?.trim() || "1080p",
+		resolution: process.env.VIDEO_RESOLUTION?.trim() || "2K",
 		aspect_ratio: aspectRatio,
 		generate_audio: true,
 	};
