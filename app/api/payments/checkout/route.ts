@@ -113,9 +113,9 @@ export async function POST(req: NextRequest) {
 			hasCheckoutUrl: typeof remote?.checkout_url === "string",
 		};
 		if (!checks.orderIdIsString || !checks.hasCheckoutUrl) {
-			console.error("[payments] unexpected provider response", { keys: Object.keys(remote ?? {}), checks });
+			console.error("[payments] unexpected provider response", { providerCode: remote?.code, providerMessage: String(remote?.message ?? "").slice(0, 200), keys: Object.keys(remote ?? {}), checks });
 			return NextResponse.json(
-				{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer.", code: "CHECKOUT_PROVIDER-RESPONSE", diagnostics: { keys: Object.keys(remote ?? {}), dataKeys: Object.keys(remote?.data ?? {}), checks } },
+				{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer.", code: "CHECKOUT_PROVIDER-RESPONSE", diagnostics: { providerCode: remote?.code ?? null, providerMessage: typeof remote?.message === "string" ? remote.message.slice(0, 200) : null, keys: Object.keys(remote ?? {}), dataKeys: Object.keys(remote?.data ?? {}), checks } },
 				{ status: 502 },
 			);
 		}
