@@ -4,6 +4,7 @@ import { user } from "@/lib/auth";
 import { dbAsync } from "@/lib/db";
 import { failure, originAllowed, unauthorized } from "@/lib/api";
 import { TOKEN_PACKAGES } from "@/lib/commerce";
+import { ConfigurationError } from "@/lib/configuration";
 import { paymentConfig, type PaymentOrder } from "@/lib/payments";
 import { infiniRequest, trustedCheckoutUrl } from "@/lib/infini.mjs";
 
@@ -13,7 +14,9 @@ const schema = z.object({
 	requestId: z.string().uuid(),
 });
 export async function POST(req: NextRequest) {
+	let stage = "start";
 	try {
+		stage = "config";
 		const config = paymentConfig();
 		if (!originAllowed(req, config.appOrigin))
 			return NextResponse.json(
@@ -28,6 +31,7 @@ export async function POST(req: NextRequest) {
 				{ error: "Choose a valid package and request ID." },
 				{ status: 400 },
 			);
+		stage = "order";
 		const { packageId, requestId } = parsed.data;
 		const pack = TOKEN_PACKAGES[packageId];
 		const pool = await dbAsync();
@@ -97,21 +101,24 @@ export async function POST(req: NextRequest) {
 		} catch (providerError) {
 			console.error("[payments] checkout creation failed", { orderId: order.id, error: (providerError as Error).message });
 			return NextResponse.json(
-				{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer." },
+				{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer.", code: "CHECKOUT_PROVIDER" },
 				{ status: 502 },
 			);
 		}
+		stage = "provider-response";
 		if (
-			typeof remote.order_id !== "string" ||
+			typeof remote?.order_id !== "string" ||
 			!remote.order_id ||
 			remote.request_id !== order.id ||
 			remote.client_reference !== order.id
 		)
-			throw new Error("Invalid payment provider reference.");
+			throw new Error(`Invalid payment provider reference; response keys: ${Object.keys(remote ?? {}).join(",")}`);
+		stage = "checkout-url";
 		const checkoutUrl = trustedCheckoutUrl(
 			remote.checkout_url,
 			config.checkoutOrigin,
 		);
+		stage = "save";
 		// A concurrent webhook may already have credited it; never regress status.
 		await pool.query(
 			"UPDATE payment_orders SET provider_order_id=$2,checkout_url=$3,status=CASE WHEN status='creating' THEN 'pending' ELSE status END,updated_at=now() WHERE id=$1",
@@ -119,6 +126,11 @@ export async function POST(req: NextRequest) {
 		);
 		return NextResponse.json({ checkoutUrl, orderId: order.id });
 	} catch (error) {
-		return failure(error);
+		console.error("[payments] checkout failed at stage", stage, (error as Error).message);
+		if (error instanceof ConfigurationError) return failure(error);
+		return NextResponse.json(
+			{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer.", code: `CHECKOUT_${stage.toUpperCase()}` },
+			{ status: 502 },
+		);
 	}
 }
