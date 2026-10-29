@@ -21,7 +21,10 @@ const schema = z.object({
 		.max(254)
 		.transform((v) => v.toLowerCase().trim()),
 	password: z.string().min(10).max(128),
+	acceptTerms: z.boolean().optional(),
+	marketing: z.boolean().optional(),
 });
+const TERMS_VERSION = process.env.TERMS_VERSION?.trim() || "2026-10-26-v1";
 export async function GET() {
 	try {
 		return NextResponse.json({ user: await user() });
@@ -40,7 +43,7 @@ export async function POST(req: NextRequest) {
 				},
 				{ status: 400 },
 			);
-		const { email, password } = body.data;
+		const { email, password, acceptTerms, marketing } = body.data;
 		const found = await (await dbAsync()).query<{
 			id: string;
 			password_hash: string;
@@ -51,6 +54,11 @@ export async function POST(req: NextRequest) {
 		let emailSent = false;
 		let devVerifyLink: string | null = null;
 		if (req.nextUrl.searchParams.get("action") === "register") {
+			if (acceptTerms !== true)
+				return NextResponse.json(
+					{ error: "Please accept the Terms and the Privacy Policy to create an account." },
+					{ status: 400 },
+				);
 			if (found.rowCount)
 				return NextResponse.json(
 					{ error: "This email is already registered." },
@@ -59,8 +67,8 @@ export async function POST(req: NextRequest) {
 			id = randomUUID();
 			try {
 				await (await dbAsync()).query(
-					"INSERT INTO users (id,email,password_hash,tokens,email_verified) VALUES ($1,$2,$3,0,false)",
-					[id, email, hashPassword(password)],
+					"INSERT INTO users (id,email,password_hash,tokens,email_verified,terms_version,terms_accepted_at,marketing_opt_in) VALUES ($1,$2,$3,0,false,$4,now(),$5)",
+					[id, email, hashPassword(password), TERMS_VERSION, marketing === true],
 				);
 			} catch (e) {
 				if ((e as { code?: string }).code === "23505")

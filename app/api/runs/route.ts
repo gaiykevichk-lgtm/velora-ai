@@ -10,7 +10,15 @@ import {
 	generateText,
 	submitVideo,
 } from "@/lib/provider";
-import { spendTokens, syncTokenBalance } from "@/lib/tokens";
+import {
+	captureReservation,
+	releaseReservation,
+	reservedTokens,
+	reserveTokens,
+	syncTokenBalance,
+} from "@/lib/tokens";
+import { failRun, sweepVideos } from "@/lib/video-jobs";
+import { fetchImageBytes, matchesAspect } from "@/lib/provider";
 const schema = z.object({
 	workspaceId: z.string().uuid(),
 	mode: z.enum(["text", "image", "video"]),
@@ -37,7 +45,8 @@ export async function GET(req: NextRequest) {
 				{ error: "Invalid workspace." },
 				{ status: 400 },
 			);
-		const check = await (await dbAsync()).query(
+		const pool = await dbAsync();
+		const check = await pool.query(
 			"SELECT 1 FROM workspaces WHERE id=$1 AND user_id=$2",
 			[id, account.id],
 		);
@@ -46,16 +55,24 @@ export async function GET(req: NextRequest) {
 				{ error: "Workspace not found." },
 				{ status: 404 },
 			);
-		const { rows } = await (await dbAsync()).query(
-			"SELECT id,mode,prompt,result,status,error,created_at FROM runs WHERE workspace_id=$1 AND user_id=$2 ORDER BY created_at ASC LIMIT 100",
+		// Server keeps tracking jobs on its own; this just nudges an immediate check.
+		void sweepVideos(account.id).catch(() => {});
+		const { rows } = await pool.query(
+			"SELECT id,mode,prompt,result,status,error,tokens_spent,aspect_ratio,duration,created_at FROM runs WHERE workspace_id=$1 AND user_id=$2 ORDER BY created_at ASC LIMIT 100",
 			[id, account.id],
 		);
-		return NextResponse.json({ runs: rows });
+		const balance = await syncTokenBalance(pool, account.id);
+		return NextResponse.json({
+			runs: rows,
+			tokens: balance.tokens,
+			reserved: await reservedTokens(pool, account.id),
+		});
 	} catch (e) {
 		return failure(e);
 	}
 }
 export async function POST(req: NextRequest) {
+	let runId: string | null = null;
 	try {
 		const account = await user();
 		if (!account) return unauthorized();
@@ -77,7 +94,8 @@ export async function POST(req: NextRequest) {
 		const { workspaceId, mode, prompt, aspectRatio, duration, reference } =
 			parsed.data;
 		const ref = parseReference(reference);
-		const workspace = await (await dbAsync()).query<{ mode: string }>(
+		const pool = await dbAsync();
+		const workspace = await pool.query<{ mode: string }>(
 			"SELECT mode FROM workspaces WHERE id=$1 AND user_id=$2",
 			[workspaceId, account.id],
 		);
@@ -86,7 +104,7 @@ export async function POST(req: NextRequest) {
 				{ error: "Workspace not found for this mode." },
 				{ status: 404 },
 			);
-		const recent = await (await dbAsync()).query(
+		const recent = await pool.query(
 			"SELECT count(*)::int AS count FROM runs WHERE user_id=$1 AND created_at>now()-interval '1 hour'",
 			[account.id],
 		);
@@ -96,34 +114,34 @@ export async function POST(req: NextRequest) {
 				{ status: 429 },
 			);
 
-		const TOKEN_RATES: Record<string, number> = {
-			text: 5,
-			image: 25,
-			video: 100,
-		};
+		const TOKEN_RATES: Record<string, number> = { text: 5, image: 25, video: 100 };
 		const tokenCost = TOKEN_RATES[mode] || 10;
-		const pool = await dbAsync();
 
-		// Expired purchase lots are removed here, so the published 12-month
-		// validity is enforced before a new run is charged.
-		const balance = await syncTokenBalance(pool, account.id);
-		const currentTokens = balance.tokens;
-		if (currentTokens < tokenCost) {
-			return NextResponse.json(
+		const id = randomUUID();
+		runId = id;
+		const insufficient = (available: number) =>
+			NextResponse.json(
 				{
-					error: `Insufficient tokens (${currentTokens} available, ${tokenCost} required for ${mode}). Please top up your balance.`,
+					error: `Insufficient tokens (${available} available, ${tokenCost} required for ${mode}). Please top up your balance.`,
 					code: "INSUFFICIENT_TOKENS",
 					required: tokenCost,
-					available: currentTokens,
+					available,
 				},
 				{ status: 402 },
 			);
+		// The run row exists first so the reservation always has an owner.
+		await pool.query(
+			"INSERT INTO runs (id,workspace_id,user_id,mode,prompt,tokens_spent,status,aspect_ratio,duration) VALUES ($1,$2,$3,$4,$5,$6,'queued',$7,$8)",
+			[id, workspaceId, account.id, mode, prompt, tokenCost, mode === "text" ? null : aspectRatio, mode === "video" ? duration : null],
+		);
+		const reserve = await reserveTokens(pool, account.id, id, tokenCost);
+		if (!reserve.ok) {
+			await pool.query("DELETE FROM runs WHERE id=$1", [id]);
+			return insufficient(reserve.tokens);
 		}
 
-		const id = randomUUID();
 		let result: string | null = null;
-		let jobId: string | null = null;
-		let status = "completed";
+		let status: string = "completed";
 		try {
 			if (mode === "text") {
 				const previous = await pool.query<{ prompt: string; result: string }>(
@@ -136,79 +154,70 @@ export async function POST(req: NextRequest) {
 						{ role: "user" as const, content: r.prompt },
 						{ role: "assistant" as const, content: r.result },
 					]);
-				result = await generateText([
-					...history,
-					{ role: "user", content: prompt },
-				]);
-			} else if (mode === "image") result = await generateImage(prompt, ref);
-			else {
-				const video = await submitVideo(
-					prompt,
-					aspectRatio,
-					duration,
-					reference,
+				result = await generateText([...history, { role: "user", content: prompt }]);
+			} else if (mode === "image") {
+				const out = await generateImage(prompt, aspectRatio, ref);
+				const file = await fetchImageBytes(out);
+				if (!file) throw new Error("image could not be stored");
+				if (!matchesAspect(file.data, aspectRatio))
+					throw new Error(`provider ignored requested format ${aspectRatio}`);
+				await pool.query(
+					"INSERT INTO run_media (run_id,user_id,mime,data) VALUES ($1,$2,$3,$4)",
+					[id, account.id, file.mime, file.data],
 				);
-				jobId = video.id;
-				result = video.outputUrl;
-				status = video.status;
+				result = `/api/media?runId=${id}`;
+			} else {
+				const video = await submitVideo(prompt, aspectRatio, duration, reference);
+				await pool.query(
+					"UPDATE runs SET provider_job_id=$2, status='queued', updated_at=now() WHERE id=$1",
+					[id, video.id],
+				);
+				status = "queued";
 			}
 		} catch (e) {
+			console.error("[run] generation failed", { runId: id, mode, error: (e as Error).message });
+			await releaseReservation(pool, id);
+			await pool.query(
+				"UPDATE runs SET status='failed', error=$2, updated_at=now() WHERE id=$1",
+				[id, "The generation failed. Your tokens were returned."],
+			);
 			if (e instanceof ConfigurationError) return failure(e);
-			throw e;
-		}
-
-		const charge = await spendTokens(pool, account.id, tokenCost);
-		if (!charge.ok)
 			return NextResponse.json(
 				{
 					error:
-						"Balance changed during generation. Please try again.",
-					code: "INSUFFICIENT_TOKENS",
+						mode === "image" && /requested format/.test((e as Error).message)
+							? "The image provider could not produce the selected format. Your tokens were returned."
+							: "The generation failed. Your tokens were returned. Please try again.",
 				},
-				{ status: 402 },
+				{ status: 502 },
 			);
-		const txId = randomUUID();
-		await pool.query(
-			"INSERT INTO token_transactions (id, user_id, amount, reason) VALUES ($1, $2, $3, $4)",
-			[
-				txId,
-				account.id,
-				-tokenCost,
-				`Generation: ${mode} (-${tokenCost} tokens)`,
-			],
-		);
+		}
 
-		await pool.query(
-			"INSERT INTO runs (id,workspace_id,user_id,mode,prompt,result,provider_job_id,tokens_spent,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-			[
-				id,
-				workspaceId,
-				account.id,
-				mode,
-				prompt,
-				result,
-				jobId,
-				tokenCost,
-				status,
-			],
-		);
-
+		if (mode !== "video") {
+			await pool.query(
+				"UPDATE runs SET status='completed', result=$2, updated_at=now() WHERE id=$1",
+				[id, result],
+			);
+			await captureReservation(pool, id, `Generation: ${mode}`);
+		}
+		const balance = await syncTokenBalance(pool, account.id);
 		return NextResponse.json(
 			{
-				run: {
-					id,
-					mode,
-					prompt,
-					result,
-					status,
-					error: null,
-					tokensSpent: tokenCost,
-				},
-				tokens: charge.tokens,
+				run: { id, mode, prompt, result, status, error: null, tokens_spent: tokenCost, aspect_ratio: mode === "text" ? null : aspectRatio, duration: mode === "video" ? duration : null },
+				tokens: balance.tokens,
+				reserved: await reservedTokens(pool, account.id),
 			},
 			{ status: 201 },
 		);
 	} catch (e) {
+		if (runId) {
+			try {
+				const pool = await dbAsync();
+				const row = await pool.query("SELECT status,provider_job_id FROM runs WHERE id=$1", [runId]);
+				if (row.rows[0] && !row.rows[0].provider_job_id && row.rows[0].status !== "completed")
+					await failRun(runId, "The generation failed. Your tokens were returned.", (e as Error).message);
+			} catch {}
+		}
 		if (e instanceof Error && e.message.startsWith("Reference image"))
 			return NextResponse.json({ error: e.message }, { status: 400 });
 		return failure(e);

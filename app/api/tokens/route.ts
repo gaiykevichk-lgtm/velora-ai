@@ -4,7 +4,7 @@ import { dbAsync } from "@/lib/db";
 import { failure, unauthorized } from "@/lib/api";
 
 import { TOKEN_PACKAGES } from "@/lib/commerce";
-import { syncTokenBalance } from "@/lib/tokens";
+import { reservedTokens, syncTokenBalance } from "@/lib/tokens";
 
 export async function GET() {
 	try {
@@ -20,6 +20,7 @@ export async function GET() {
 		);
 		return NextResponse.json({
 			tokens: balance.tokens,
+			reserved: await reservedTokens(pool, account.id),
 			tokensExpireAt: balance.expiresAt,
 			rates: { text: 5, image: 25, video: 100 },
 			packages: TOKEN_PACKAGES,

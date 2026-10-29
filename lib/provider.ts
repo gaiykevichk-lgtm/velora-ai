@@ -91,8 +91,12 @@ export async function generateText(
 	return text;
 }
 
+import { type AspectRatio, IMAGE_SIZES } from "./image-format";
+export { type AspectRatio, IMAGE_SIZES, imageDimensions, matchesAspect } from "./image-format";
+
 export async function generateImage(
 	prompt: string,
+	aspect: AspectRatio = "1:1",
 	reference?: { mime: string; base64: string },
 ) {
 	required("IMAGE_API_BASE_URL", "IMAGE_API_KEY", "IMAGE_MODEL");
@@ -129,7 +133,7 @@ export async function generateImage(
 						},
 					],
 					modalities: ["image", "text"],
-					image_config: { aspect_ratio: "1:1", image_size: "1K" },
+					image_config: { aspect_ratio: aspect, image_size: "1K" },
 				}),
 			},
 			key,
@@ -140,7 +144,13 @@ export async function generateImage(
 			{
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ model, prompt, n: 1, size: "1024x1024" }),
+				body: JSON.stringify({
+					model,
+					prompt,
+					n: 1,
+					size: IMAGE_SIZES[aspect],
+					aspect_ratio: aspect,
+				}),
 			},
 			key,
 		);
@@ -168,7 +178,7 @@ export async function submitVideo(
 		model: process.env.VIDEO_MODEL,
 		prompt,
 		duration,
-		resolution: "2K",
+		resolution: process.env.VIDEO_RESOLUTION?.trim() || "1080p",
 		aspect_ratio: aspectRatio,
 		generate_audio: true,
 	};
@@ -197,20 +207,14 @@ export async function submitVideo(
 				? data.job_id
 				: null;
 	if (!id) throw new Error("The video provider did not return a job ID.");
-	const rawStatus = String(data?.status ?? "pending").toLowerCase();
-	const status =
-		rawStatus === "completed" ||
-		rawStatus === "succeeded" ||
-		rawStatus === "success"
-			? "completed"
-			: "pending";
 	const outputUrl =
 		typeof data?.output_url === "string"
 			? data.output_url
 			: typeof data?.video_url === "string"
 				? data.video_url
 				: null;
-	return { id, status, outputUrl };
+	console.info("[video] submitted", { jobId: id, aspectRatio, duration });
+	return { id, status: "queued" as const, outputUrl };
 }
 
 function extractVideoUrl(data: any, jobId: string): string | null {
@@ -231,6 +235,8 @@ function extractVideoUrl(data: any, jobId: string): string | null {
 	return `/api/video-content?jobId=${encodeURIComponent(jobId)}`;
 }
 
+export type VideoState = "queued" | "processing" | "completed" | "failed";
+
 export async function videoStatus(id: string) {
 	required("VIDEO_STATUS_URL", "VIDEO_API_KEY");
 	const template = process.env.VIDEO_STATUS_URL!;
@@ -242,17 +248,72 @@ export async function videoStatus(id: string) {
 		{ method: "GET" },
 		process.env.VIDEO_API_KEY!,
 	);
-	const rawStatus = String(data?.status ?? "pending").toLowerCase();
-	const status =
-		rawStatus === "completed" ||
-		rawStatus === "succeeded" ||
-		rawStatus === "success"
-			? "completed"
-			: rawStatus === "failed" || rawStatus === "error"
-				? "failed"
-				: "pending";
+	const rawStatus = String(data?.status ?? "queued").toLowerCase();
+	let status: VideoState;
+	if (["completed", "succeeded", "success", "done", "finished"].includes(rawStatus))
+		status = "completed";
+	else if (["failed", "error", "cancelled", "canceled", "expired", "rejected"].includes(rawStatus))
+		status = "failed";
+	else if (["queued", "pending", "submitted", "created", "waiting"].includes(rawStatus))
+		status = "queued";
+	else status = "processing";
+	const reason =
+		typeof data?.error === "string"
+			? data.error
+			: typeof data?.error?.message === "string"
+				? data.error.message
+				: typeof data?.message === "string"
+					? data.message
+					: "";
 	return {
 		status,
+		rawStatus,
+		reason,
 		outputUrl: status === "completed" ? extractVideoUrl(data, id) : null,
 	};
+}
+
+// Download a finished video so it no longer depends on the provider's retention.
+export async function downloadVideo(
+	jobId: string,
+	outputUrl: string | null,
+): Promise<{ mime: string; data: Buffer } | null> {
+	required("VIDEO_STATUS_URL", "VIDEO_API_KEY");
+	const key = process.env.VIDEO_API_KEY!;
+	const template = process.env.VIDEO_STATUS_URL!;
+	const base = template.includes("{id}")
+		? template.replace("{id}", encodeURIComponent(jobId))
+		: `${baseUrl(template)}/${encodeURIComponent(jobId)}`;
+	const urls = [
+		...(outputUrl?.startsWith("https://") ? [outputUrl] : []),
+		`${baseUrl(base)}/content?index=0`,
+	];
+	for (const url of urls) {
+		try {
+			const r = await fetch(url, {
+				headers: url.startsWith(baseUrl(base)) ? { Authorization: `Bearer ${key}` } : {},
+				signal: AbortSignal.timeout(120000),
+				cache: "no-store",
+			});
+			if (!r.ok) continue;
+			const data = Buffer.from(await r.arrayBuffer());
+			if (data.length > 0 && data.length <= 80_000_000)
+				return { mime: r.headers.get("content-type")?.split(";")[0] || "video/mp4", data };
+		} catch {
+			/* try next source */
+		}
+	}
+	return null;
+}
+
+// Fetch an https image or decode a data URI into bytes.
+export async function fetchImageBytes(
+	result: string,
+): Promise<{ mime: string; data: Buffer } | null> {
+	const m = /^data:(image\/[a-z+.-]+);base64,([\s\S]+)$/.exec(result);
+	if (m) return { mime: m[1], data: Buffer.from(m[2], "base64") };
+	if (!result.startsWith("https://")) return null;
+	const r = await fetch(result, { signal: AbortSignal.timeout(60000), cache: "no-store" });
+	if (!r.ok) return null;
+	return { mime: r.headers.get("content-type")?.split(";")[0] || "image/png", data: Buffer.from(await r.arrayBuffer()) };
 }

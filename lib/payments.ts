@@ -6,19 +6,29 @@ import {
 	creditVerifiedOrder,
 } from "./infini.mjs";
 
+// Names (never values) of settings that stop online payments from working.
+export function missingPaymentSettings() {
+	const missing = [
+		"DATABASE_URL",
+		"INFINI_KEY_ID",
+		"INFINI_SECRET_KEY",
+		"INFINI_WEBHOOK_SECRET",
+		"APP_BASE_URL",
+	].filter((name) => !process.env[name]);
+	if (process.env.INFINI_ENABLED !== "true") missing.unshift("INFINI_ENABLED");
+	return missing;
+}
+
 export function paymentConfig() {
-	if (
-		process.env.INFINI_ENABLED !== "true" ||
-		!process.env.DATABASE_URL ||
-		!process.env.INFINI_KEY_ID ||
-		!process.env.INFINI_SECRET_KEY ||
-		!process.env.INFINI_WEBHOOK_SECRET ||
-		!process.env.APP_BASE_URL
-	)
+	const missing = missingPaymentSettings();
+	if (missing.length) {
+		console.error("[payments] not configured, missing:", missing.join(", "));
+	}
+	if (missing.length)
 		throw new ConfigurationError(
 			"Online payments are not configured yet. No payment has been taken.",
 		);
-	const app = new URL(process.env.APP_BASE_URL);
+	const app = new URL(process.env.APP_BASE_URL as string);
 	const api = new URL(
 		process.env.INFINI_API_BASE_URL || "https://openapi.infini.money",
 	);
@@ -41,9 +51,9 @@ export function paymentConfig() {
 		appOrigin: app.origin,
 		apiBase: api.origin,
 		checkoutOrigin: checkout.origin,
-		keyId: process.env.INFINI_KEY_ID,
-		secret: process.env.INFINI_SECRET_KEY,
-		webhookSecret: process.env.INFINI_WEBHOOK_SECRET,
+		keyId: process.env.INFINI_KEY_ID as string,
+		secret: process.env.INFINI_SECRET_KEY as string,
+		webhookSecret: process.env.INFINI_WEBHOOK_SECRET as string,
 	};
 }
 export function paymentsEnabled() {

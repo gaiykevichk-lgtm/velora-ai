@@ -199,7 +199,9 @@ test("a balance credited before lot tracking is carried over, not dropped", asyn
 test("generation and credit paths use the shared lot helpers", () => {
 	const runs = readFileSync("app/api/runs/route.ts", "utf8");
 	assert.match(runs, /syncTokenBalance/);
-	assert.match(runs, /spendTokens/);
+	assert.match(runs, /reserveTokens/);
+	assert.match(runs, /captureReservation/);
+	assert.match(runs, /releaseReservation/);
 	assert.match(readFileSync("lib/infini.mjs", "utf8"), /grantTokens/);
 	assert.match(
 		readFileSync("app/api/bank-transfer/admin/route.ts", "utf8"),

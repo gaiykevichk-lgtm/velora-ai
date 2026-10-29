@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
 				),
 				orderId: order.id,
 			});
-		const remote = await infiniRequest(config, "POST", "/v1/acquiring/order", {
+		let remote: any;
+		try {
+		remote = await infiniRequest(config, "POST", "/v1/acquiring/order", {
 			request_id: order.id,
 			client_reference: order.id,
 			amount: String(order.eur_amount),
@@ -92,6 +94,13 @@ export async function POST(req: NextRequest) {
 			failure_url: `${config.appOrigin}/studio?topup=open&paymentOrder=${order.id}`,
 			// Omit pay_methods: only merchant-approved configured methods are offered.
 		});
+		} catch (providerError) {
+			console.error("[payments] checkout creation failed", { orderId: order.id, error: (providerError as Error).message });
+			return NextResponse.json(
+				{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer." },
+				{ status: 502 },
+			);
+		}
 		if (
 			typeof remote.order_id !== "string" ||
 			!remote.order_id ||

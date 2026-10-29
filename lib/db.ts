@@ -11,14 +11,18 @@ declare global {
 	var __veloraMemDb: Promise<Queryable> | undefined;
 }
 
-const SCHEMA = `CREATE TABLE IF NOT EXISTS users (id uuid PRIMARY KEY, email text NOT NULL UNIQUE, password_hash text NOT NULL, tokens int NOT NULL DEFAULT 0, email_verified boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now());
+const SCHEMA = `CREATE TABLE IF NOT EXISTS users (id uuid PRIMARY KEY, email text NOT NULL UNIQUE, password_hash text NOT NULL, tokens int NOT NULL DEFAULT 0, email_verified boolean NOT NULL DEFAULT false, terms_version text, terms_accepted_at timestamptz, marketing_opt_in boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS password_resets (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash text NOT NULL UNIQUE, expires_at timestamptz NOT NULL, used_at timestamptz, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS email_verifications (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash text NOT NULL UNIQUE, expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id);
 CREATE TABLE IF NOT EXISTS sessions (id_hash text PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at timestamptz NOT NULL);
 CREATE TABLE IF NOT EXISTS workspaces (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, title text NOT NULL, mode text NOT NULL CHECK(mode IN ('text','image','video')), created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, created_at DESC);
-CREATE TABLE IF NOT EXISTS runs (id uuid PRIMARY KEY, workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, mode text NOT NULL CHECK(mode IN ('text','image','video')), prompt text NOT NULL, result text, provider_job_id text, tokens_spent int NOT NULL DEFAULT 0, status text NOT NULL CHECK(status IN ('pending','completed','failed')), error text, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS runs (id uuid PRIMARY KEY, workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, mode text NOT NULL CHECK(mode IN ('text','image','video')), prompt text NOT NULL, result text, provider_job_id text, tokens_spent int NOT NULL DEFAULT 0, status text NOT NULL CHECK(status IN ('pending','queued','processing','completed','failed')), error text, aspect_ratio text, duration int, provider_status text, updated_at timestamptz NOT NULL DEFAULT now(), created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_runs_workspace ON runs(workspace_id, created_at ASC);
+CREATE TABLE IF NOT EXISTS token_reservations (id uuid PRIMARY KEY, run_id uuid NOT NULL UNIQUE, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, amount int NOT NULL CHECK(amount>0), lots jsonb NOT NULL DEFAULT '[]', state text NOT NULL DEFAULT 'reserved' CHECK(state IN ('reserved','captured','released')), created_at timestamptz NOT NULL DEFAULT now(), settled_at timestamptz);
+CREATE INDEX IF NOT EXISTS idx_reservations_user ON token_reservations(user_id, state);
+CREATE TABLE IF NOT EXISTS run_media (run_id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, mime text NOT NULL, data bytea NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS token_lots (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, tokens int NOT NULL CHECK(tokens>0), remaining int NOT NULL CHECK(remaining>=0), expires_at timestamptz NOT NULL, source text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_token_lots_user ON token_lots(user_id, expires_at);
 CREATE TABLE IF NOT EXISTS token_transactions (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, amount int NOT NULL, reason text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
@@ -106,6 +110,16 @@ export function db(): Pool | Queryable {
 let schemaReady: Promise<void> | undefined;
 // Idempotent migrations for databases created before a column/table existed.
 const MIGRATIONS = [
+	"ALTER TABLE runs DROP CONSTRAINT IF EXISTS runs_status_check",
+	"ALTER TABLE runs ADD CONSTRAINT runs_status_check CHECK(status IN ('pending','queued','processing','completed','failed'))",
+	"ALTER TABLE runs ADD COLUMN IF NOT EXISTS aspect_ratio text",
+	"ALTER TABLE runs ADD COLUMN IF NOT EXISTS duration int",
+	"ALTER TABLE runs ADD COLUMN IF NOT EXISTS provider_status text",
+	"ALTER TABLE runs ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()",
+	"CREATE TABLE IF NOT EXISTS password_resets (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash text NOT NULL UNIQUE, expires_at timestamptz NOT NULL, used_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())",
+	"ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version text",
+	"ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at timestamptz",
+	"ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_opt_in boolean NOT NULL DEFAULT false",
 	"ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT false",
 	`CREATE TABLE IF NOT EXISTS email_verifications (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash text NOT NULL UNIQUE, expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
 	"CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON email_verifications(user_id)",

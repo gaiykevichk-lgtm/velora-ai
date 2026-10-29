@@ -438,7 +438,7 @@ type TokenOrder = {
 	email?: string;
 	user_id?: string;
 };
-type Space = { id: string; title: string; mode: Mode };
+type Space = { id: string; title: string; mode: Mode; created_at?: string };
 type Run = {
 	id: string;
 	mode: Mode;
@@ -447,6 +447,17 @@ type Run = {
 	tokens_spent?: number;
 	status: string;
 	error: string | null;
+	aspect_ratio?: string | null;
+	duration?: number | null;
+	created_at?: string;
+};
+const ACTIVE = ["pending", "queued", "processing"];
+const STATUS_LABEL: Record<string, string> = {
+	pending: "In queue",
+	queued: "In queue",
+	processing: "Generating",
+	completed: "Done",
+	failed: "Error",
 };
 
 const modes: {
@@ -507,6 +518,7 @@ export function Workspace() {
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [runs, setRuns] = useState<Run[]>([]);
 	const [historyLoading, setHistoryLoading] = useState(false);
+	const [reserved, setReserved] = useState(0);
 	const [prompt, setPrompt] = useState(
 		searchParams.get("prompt")?.slice(0, 8000) ?? "",
 	);
@@ -519,7 +531,9 @@ export function Workspace() {
 	const [topupOpen, setTopupOpen] = useState(
 		searchParams.get("topup") === "open",
 	);
-	const [authMode, setAuthMode] = useState<"register" | "login">("register");
+	const [authMode, setAuthMode] = useState<"register" | "login" | "forgot">("register");
+	const [acceptTerms, setAcceptTerms] = useState(false);
+	const [marketing, setMarketing] = useState(false);
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -527,6 +541,7 @@ export function Workspace() {
 	const [isAdmin, setIsAdmin] = useState(false);
 	const [bankConfigured, setBankConfigured] = useState(true);
 	const [onlineEnabled, setOnlineEnabled] = useState(false);
+	const [paymentsLoaded, setPaymentsLoaded] = useState(false);
 	const [paymentOrders, setPaymentOrders] = useState<TokenOrder[]>([]);
 	const [checkoutRequest, setCheckoutRequest] = useState<{
 		packageId: string;
@@ -595,6 +610,14 @@ export function Workspace() {
 		};
 	}, [menuOpen, authOpen, topupOpen]);
 
+	useEffect(() => {
+		const wanted = searchParams.get("auth");
+		if (wanted === "login" || wanted === "register") {
+			setAuthMode(wanted);
+			setAuthOpen(true);
+		}
+	}, [searchParams]);
+
 	const loadSpaces = useCallback(async () => {
 		try {
 			const data = await request<{ workspaces: Space[] }>("/api/workspaces");
@@ -627,8 +650,12 @@ export function Workspace() {
 		setHistoryLoading(true);
 		(async () => {
 			try {
-				const data = await request<{ runs: Run[] }>(`/api/runs?workspaceId=${encodeURIComponent(activeId)}`, { signal: controller.signal });
-				if (!controller.signal.aborted) setRuns(data.runs);
+				const data = await request<{ runs: Run[]; tokens?: number; reserved?: number }>(`/api/runs?workspaceId=${encodeURIComponent(activeId)}`, { signal: controller.signal });
+				if (!controller.signal.aborted) {
+					setRuns(data.runs);
+					if (typeof data.tokens === "number") setTokens(data.tokens);
+					if (typeof data.reserved === "number") setReserved(data.reserved);
+				}
 			} catch {
 				if (!controller.signal.aborted) setError("Could not load this project's history. Please try again.");
 			} finally {
@@ -638,9 +665,28 @@ export function Workspace() {
 		return () => controller.abort();
 	}, [activeId, account]);
 
+	useEffect(() => {
+		if (!account || !runs.some((r) => ACTIVE.includes(r.status))) return;
+		const timer = setInterval(async () => {
+			const active = runs.filter((r) => r.mode === "video" && ACTIVE.includes(r.status));
+			for (const r of active) {
+				try {
+					const d = await request<{ status: string; result: string | null; error: string | null; tokens?: number; reserved?: number }>(`/api/video-status?id=${r.id}`);
+					setRuns((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: d.status, result: d.result, error: d.error } : x)));
+					if (typeof d.tokens === "number") setTokens(d.tokens);
+					if (typeof d.reserved === "number") setReserved(d.reserved);
+				} catch {
+					/* the server keeps tracking the job; retry on next tick */
+				}
+			}
+		}, 8000);
+		return () => clearInterval(timer);
+	}, [account, runs]);
+
 	const refreshTokens = useCallback(async () => {
 		try {
-			const data = await request<{ tokens: number }>("/api/tokens");
+			const data = await request<{ tokens: number; reserved?: number }>("/api/tokens");
+			if (typeof data.reserved === "number") setReserved(data.reserved);
 			setTokens(data.tokens);
 		} catch {
 			/* Ignore if not logged in */
@@ -778,6 +824,7 @@ export function Workspace() {
 				);
 				setOnlineEnabled(data.enabled);
 				setPaymentOrders(data.orders);
+				setPaymentsLoaded(true);
 				if (orderId) {
 					const order = data.orders.find((o) => o.id === orderId);
 					setOrderMsg(
@@ -788,6 +835,7 @@ export function Workspace() {
 					void refreshTokens();
 				}
 			} catch (e) {
+				setPaymentsLoaded(true);
 				setError((e as Error).message);
 			}
 		},
@@ -862,6 +910,22 @@ export function Workspace() {
 		setBusy(true);
 		setError("");
 		setVerifyNotice("");
+		if (authMode === "forgot") {
+			try {
+				await request("/api/auth/password", { method: "POST", body: JSON.stringify({ email }) });
+				setVerifyNotice("If this email has an account, a reset link is on its way. It works once and expires in 60 minutes.");
+			} catch (e) {
+				setError((e as Error).message);
+			} finally {
+				setBusy(false);
+			}
+			return;
+		}
+		if (authMode === "register" && !acceptTerms) {
+			setError("Please accept the Terms and the Privacy Policy to create an account.");
+			setBusy(false);
+			return;
+		}
 		try {
 			const data = await request<{
 				user: Account;
@@ -870,7 +934,7 @@ export function Workspace() {
 				devVerifyLink?: string;
 			}>(`/api/auth?action=${authMode}`, {
 				method: "POST",
-				body: JSON.stringify({ email, password }),
+				body: JSON.stringify({ email, password, acceptTerms, marketing }),
 			});
 			if (data.needsVerification) {
 				setVerifyNotice(
@@ -925,7 +989,7 @@ export function Workspace() {
 			method: "POST",
 			body: JSON.stringify({
 				mode: currentMode,
-				title: `Untitled ${currentMode === "text" ? "chat" : currentMode + " project"}`,
+				title: `${currentMode === "text" ? "Chat" : currentMode === "image" ? "Image project" : "Video project"} · ${new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`,
 			}),
 		});
 		setSpaces((prev) => [data.workspace, ...prev]);
@@ -991,7 +1055,7 @@ export function Workspace() {
 				activeId && spaces.find((space) => space.id === activeId)?.mode === mode
 					? activeId
 					: await newSpace();
-			const data = await request<{ run: Run; tokens?: number }>("/api/runs", {
+			const data = await request<{ run: Run; tokens?: number; reserved?: number }>("/api/runs", {
 				method: "POST",
 				body: JSON.stringify({
 					workspaceId: id,
@@ -1003,6 +1067,7 @@ export function Workspace() {
 				}),
 			});
 			setRuns((prev) => [...prev, data.run]);
+			if (typeof data.reserved === "number") setReserved(data.reserved);
 			if (typeof data.tokens === "number") {
 				setTokens(data.tokens);
 			} else {
@@ -1016,6 +1081,7 @@ export function Workspace() {
 				setTopupOpen(true);
 			}
 			setError(msg);
+			void refreshTokens();
 		} finally {
 			setBusy(false);
 		}
@@ -1163,7 +1229,7 @@ export function Workspace() {
 					) : (
 						<button
 							className="account-box w-full justify-between hover:text-white"
-							onClick={() => setAuthOpen(true)}
+							onClick={() => { setAuthMode("login"); setAuthOpen(true); }}
 						>
 							<div className="flex items-center gap-2">
 								<span className="avatar bg-[#24160c] text-[#ffe4a6] border border-[#3a2a1a]">
@@ -1216,7 +1282,7 @@ export function Workspace() {
 							className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#24160c] border border-[#3a2a1a] text-xs font-semibold text-[#ffe4a6] hover:border-[#f54900] transition-colors"
 						>
 							<Coins size={14} className="text-[#f54900]" />
-							<span>{tokens.toLocaleString()} Tokens</span>
+							<span>{tokens.toLocaleString()} Tokens{reserved > 0 ? ` · ${reserved.toLocaleString()} reserved` : ""}</span>
 							<Plus size={12} className="opacity-70" />
 						</button>
 
@@ -1249,7 +1315,7 @@ export function Workspace() {
 									? "Craft scripts, scenes & prompts."
 									: mode === "image"
 										? "Generate photorealistic visuals."
-										: "Render cinematic 2K video motion."}
+										: "Render cinematic video motion."}
 							</h1>
 							<p className="studio-subtitle">{current.subtitle}</p>
 						</div>
@@ -1334,7 +1400,7 @@ export function Workspace() {
 											onChange={(e) => setDuration(Number(e.target.value))}
 										>
 											<option value={6}>6 Seconds</option>
-											<option value={10}>10 Seconds (2K)</option>
+											<option value={10}>10 Seconds</option>
 										</select>
 									)}
 								</div>
@@ -1406,7 +1472,7 @@ export function Workspace() {
 													{run.mode} generation
 												</span>
 												<div className="flex items-center gap-3">
-													{run.tokens_spent && (
+													{run.tokens_spent && run.status === "completed" && (
 														<span className="text-[#f3913e] font-bold">
 															-{run.tokens_spent} tokens
 														</span>
@@ -1415,12 +1481,12 @@ export function Workspace() {
 														className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
 															run.status === "completed"
 																? "bg-[#0f2e1a] text-[#33ec64]"
-																: run.status === "pending"
+																: ACTIVE.includes(run.status)
 																	? "bg-[#33220f] text-[#f99c00]"
 																	: "bg-[#331118] text-[#ff3355]"
 														}`}
 													>
-														{run.status}
+														{STATUS_LABEL[run.status] ?? run.status}
 													</span>
 												</div>
 											</div>
@@ -1429,12 +1495,11 @@ export function Workspace() {
 												{run.prompt}
 											</p>
 
-											{run.status === "pending" ? (
+											{ACTIVE.includes(run.status) ? (
 												<div className="p-4 rounded-lg bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] flex items-center gap-3">
 													<div className="w-4 h-4 rounded-full border-2 border-[#f54900] border-t-transparent animate-spin" />
 													<span>
-														Video rendering in progress on 2K cluster.
-														Auto-refreshing...
+														{run.status === "processing" ? "Your video is being generated." : "Your video is in the queue."} This page updates by itself, and the server keeps working even if you close it.
 													</span>
 												</div>
 											) : run.status === "failed" ? (
@@ -1463,6 +1528,15 @@ export function Workspace() {
 												)
 											) : (
 												<p className="text-xs text-[#8a7e6f]">Result ready.</p>
+											)}
+											{run.status === "completed" && run.mode !== "text" && run.result?.startsWith("/api/media") && (
+												<a
+													href={`${run.result}&download=1`}
+													download
+													className="inline-block mt-3 text-xs font-bold text-[#ffe4a6] hover:text-white underline"
+												>
+													Download {run.mode === "video" ? "video" : "image"}
+												</a>
 											)}
 										</div>
 									))}
@@ -1536,13 +1610,15 @@ export function Workspace() {
 								<button
 									key={id}
 									type="button"
-									disabled={busy || !onlineEnabled || !account}
+									disabled={busy || !onlineEnabled || !account || !paymentsLoaded}
 									title={
 										!account
 											? "Sign in to pay by card"
-											: onlineEnabled
-												? "Continue to Infini"
-												: "Card payments are temporarily unavailable"
+											: !paymentsLoaded
+												? "Loading payment methods"
+												: onlineEnabled
+													? "Continue to Infini"
+													: "Card payments are temporarily unavailable"
 									}
 									onClick={() =>
 										void checkout(id as keyof typeof TOKEN_PACKAGES)
@@ -1559,9 +1635,11 @@ export function Workspace() {
 									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">
 										{!account
 											? "Sign in to pay by card"
-											: onlineEnabled
-												? "Pay with Infini ↗"
-												: "Online payment unavailable"}
+											: !paymentsLoaded
+												? "Loading payment methods…"
+												: onlineEnabled
+													? "Pay with Infini ↗"
+													: "Online payment unavailable"}
 									</div>
 								</button>
 							))}
@@ -1573,7 +1651,7 @@ export function Workspace() {
 								by bank transfer below — the same tokens either way.
 							</p>
 						)}
-						{account && !onlineEnabled && (
+						{account && paymentsLoaded && !onlineEnabled && (
 							<p className="text-sm text-[#ffe4a6]">
 								Card payments are temporarily unavailable. No charge has been
 								made — use the bank transfer order below.
@@ -1590,7 +1668,7 @@ export function Workspace() {
 									className="mt-2 rounded-lg border border-[#3a2a1a] p-3"
 								>
 									€{o.eur_amount} · {o.tokens.toLocaleString("en-US")} tokens ·{" "}
-									{o.status}
+									{({ creating: "Preparing", pending: "Awaiting payment", processing: "Payment processing", credited: "Paid", expired: "Expired", review: "Under review" } as Record<string, string>)[o.status] ?? o.status}
 									{o.status !== "credited" && (
 										<button
 											type="button"
@@ -1879,12 +1957,14 @@ export function Workspace() {
 						<VeloraLogo size={36} />
 
 						<h3 className="text-2xl font-black text-white mt-4 mb-1">
-							{authMode === "register" ? "Create your account" : "Welcome back"}
+							{authMode === "register" ? "Create your account" : authMode === "forgot" ? "Reset your password" : "Welcome back"}
 						</h3>
 						<p className="text-xs text-[#b8ac90] mb-6">
 							{authMode === "register"
 								? "Create an account to access automated AI generation. No free signup tokens are issued."
-								: "Sign in to access your token balance, workspaces, and history."}
+								: authMode === "forgot"
+									? "Enter your email and we will send a one-time link to set a new password."
+									: "Sign in to access your token balance, workspaces, and history."}
 						</p>
 
 						{error && (
@@ -1917,7 +1997,7 @@ export function Workspace() {
 								/>
 							</div>
 
-							<div>
+							{authMode !== "forgot" && (<div>
 								<label className="text-xs font-bold uppercase text-[#8a7e6f] block mb-1">
 									Password (min. 10 characters)
 								</label>
@@ -1936,7 +2016,30 @@ export function Workspace() {
 									placeholder="••••••••••••"
 									className="w-full bg-[#120a05] border border-[#3a2a1a] rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-[#f54900]"
 								/>
-							</div>
+								{authMode === "login" && (
+									<button
+										type="button"
+										className="mt-2 text-xs text-[#ffe4a6] hover:underline"
+										onClick={() => { setAuthMode("forgot"); setError(""); setVerifyNotice(""); }}
+									>
+										Forgot password?
+									</button>
+								)}
+							</div>)}
+							{authMode === "register" && (
+								<div className="flex flex-col gap-2 text-xs text-[#b8ac90]">
+									<label className="flex items-start gap-2">
+										<input type="checkbox" required checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} />
+										<span>
+											I accept the <a href="/terms-and-conditions" target="_blank" rel="noreferrer" className="underline text-[#ffe4a6]">Terms</a> and the <a href="/privacy-policy" target="_blank" rel="noreferrer" className="underline text-[#ffe4a6]">Privacy Policy</a>.
+										</span>
+									</label>
+									<label className="flex items-start gap-2">
+										<input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
+										<span>Send me product news by email (optional).</span>
+									</label>
+								</div>
+							)}
 
 							<button
 								type="submit"
@@ -1947,11 +2050,13 @@ export function Workspace() {
 									? "Please wait..."
 									: authMode === "register"
 										? "Create Account"
-										: "Sign In"}
+										: authMode === "forgot"
+											? "Send reset link"
+											: "Sign In"}
 							</button>
 						</form>
 
-						<div className="mt-4 text-center text-xs text-[#8a7e6f]">
+						{authMode !== "forgot" && <div className="mt-4 text-center text-xs text-[#8a7e6f]">
 							Didn\u2019t get the confirmation email?{" "}
 							<button
 								type="button"
@@ -1961,7 +2066,7 @@ export function Workspace() {
 							>
 								{resendBusy ? "Sending\u2026" : "Resend confirmation link"}
 							</button>
-						</div>
+						</div>}
 
 						<div className="mt-4 text-center text-xs text-[#8a7e6f]">
 							{authMode === "register" ? (
@@ -1978,6 +2083,10 @@ export function Workspace() {
 										Sign in
 									</button>
 								</>
+							) : authMode === "forgot" ? (
+								<button className="text-[#ffe4a6] font-bold hover:underline" onClick={() => { setAuthMode("login"); setError(""); setVerifyNotice(""); }}>
+									Back to sign in
+								</button>
 							) : (
 								<>
 									Need an account?{" "}

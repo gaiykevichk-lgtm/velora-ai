@@ -164,3 +164,121 @@ export async function spendTokens(
 	const synced = await syncTokenBalance(pool, userId);
 	return { ok: true, tokens: synced.tokens };
 }
+
+export type ReservationLot = { id: string; take: number };
+
+// Reserve the cost of an operation: the tokens leave the spendable balance at
+// once but are only charged for good when the operation completes (capture).
+// A confirmed failure gives them back (release). Both settle at most once.
+export async function reserveTokens(
+	pool: Queryable,
+	userId: string,
+	runId: string,
+	cost: number,
+): Promise<{ ok: boolean; tokens: number }> {
+	await syncTokenBalance(pool, userId);
+	const { rows } = await pool.query(
+		"SELECT id,remaining,expires_at FROM token_lots WHERE user_id=$1 AND remaining>0 AND expires_at>now() ORDER BY expires_at ASC, created_at ASC",
+		[userId],
+	);
+	const taken: ReservationLot[] = [];
+	if (!rows.length) {
+		const deducted = await pool.query(
+			"UPDATE users SET tokens=tokens-$1::int WHERE id=$2 AND tokens >= $1::int RETURNING tokens",
+			[cost, userId],
+		);
+		if (!deducted.rowCount) return { ok: false, tokens: 0 };
+	} else {
+		const plan = planConsumption(rows as TokenLot[], cost);
+		if (plan.shortfall > 0) {
+			const balance = rows.reduce(
+				(sum: number, lot: TokenLot) => sum + Number(lot.remaining),
+				0,
+			);
+			return { ok: false, tokens: balance };
+		}
+		for (const item of plan.consume) {
+			const upd = await pool.query(
+				"UPDATE token_lots SET remaining=remaining-$2::int WHERE id=$1 AND remaining>=$2::int",
+				[item.id, item.take],
+			);
+			if (!upd.rowCount) {
+				// Concurrent spend: undo what was taken so far.
+				for (const t of taken)
+					await pool.query(
+						"UPDATE token_lots SET remaining=remaining+$2::int WHERE id=$1",
+						[t.id, t.take],
+					);
+				await syncTokenBalance(pool, userId);
+				return { ok: false, tokens: 0 };
+			}
+			taken.push(item);
+		}
+	}
+	await pool.query(
+		"INSERT INTO token_reservations (id,run_id,user_id,amount,lots) VALUES ($1,$2,$3,$4,$5::jsonb)",
+		[randomUUID(), runId, userId, cost, JSON.stringify(taken)],
+	);
+	const synced = await syncTokenBalance(pool, userId);
+	return { ok: true, tokens: synced.tokens };
+}
+
+// Final charge: marks the reservation captured and writes the ledger entry.
+export async function captureReservation(
+	pool: Queryable,
+	runId: string,
+	reason: string,
+): Promise<boolean> {
+	const res = await pool.query(
+		"UPDATE token_reservations SET state='captured', settled_at=now() WHERE run_id=$1 AND state='reserved' RETURNING user_id,amount",
+		[runId],
+	);
+	if (!res.rowCount) return false;
+	const { user_id, amount } = res.rows[0];
+	await pool.query(
+		"INSERT INTO token_transactions (id,user_id,amount,reason) VALUES ($1,$2,$3,$4)",
+		[randomUUID(), user_id, -Number(amount), `${reason} (-${amount} tokens)`],
+	);
+	return true;
+}
+
+// Give a reservation back (confirmed failure / cancellation / timeout).
+export async function releaseReservation(
+	pool: Queryable,
+	runId: string,
+): Promise<boolean> {
+	const res = await pool.query(
+		"UPDATE token_reservations SET state='released', settled_at=now() WHERE run_id=$1 AND state='reserved' RETURNING user_id,amount,lots",
+		[runId],
+	);
+	if (!res.rowCount) return false;
+	const { user_id, amount } = res.rows[0];
+	const lots: ReservationLot[] =
+		typeof res.rows[0].lots === "string"
+			? JSON.parse(res.rows[0].lots)
+			: (res.rows[0].lots ?? []);
+	if (!lots.length)
+		await pool.query("UPDATE users SET tokens=tokens+$1::int WHERE id=$2", [
+			Number(amount),
+			user_id,
+		]);
+	else
+		for (const lot of lots)
+			await pool.query(
+				"UPDATE token_lots SET remaining=remaining+$2::int WHERE id=$1",
+				[lot.id, lot.take],
+			);
+	await syncTokenBalance(pool, user_id);
+	return true;
+}
+
+export async function reservedTokens(
+	pool: Queryable,
+	userId: string,
+): Promise<number> {
+	const r = await pool.query(
+		"SELECT COALESCE(sum(amount),0)::int AS reserved FROM token_reservations WHERE user_id=$1 AND state='reserved'",
+		[userId],
+	);
+	return Number(r.rows[0]?.reserved ?? 0);
+}
