@@ -106,13 +106,21 @@ export async function POST(req: NextRequest) {
 			);
 		}
 		stage = "provider-response";
-		if (
-			typeof remote?.order_id !== "string" ||
-			!remote.order_id ||
-			remote.request_id !== order.id ||
-			remote.client_reference !== order.id
-		)
-			throw new Error(`Invalid payment provider reference; response keys: ${Object.keys(remote ?? {}).join(",")}`);
+		const checks = {
+			orderIdIsString: typeof remote?.order_id === "string" && Boolean(remote.order_id),
+			requestIdMatches: remote?.request_id === order.id,
+			clientReferenceMatches: remote?.client_reference === order.id,
+			hasCheckoutUrl: typeof remote?.checkout_url === "string",
+		};
+		if (!checks.orderIdIsString || !checks.hasCheckoutUrl) {
+			console.error("[payments] unexpected provider response", { keys: Object.keys(remote ?? {}), checks });
+			return NextResponse.json(
+				{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer.", code: "CHECKOUT_PROVIDER-RESPONSE", diagnostics: { keys: Object.keys(remote ?? {}), dataKeys: Object.keys(remote?.data ?? {}), checks } },
+				{ status: 502 },
+			);
+		}
+		if (!checks.requestIdMatches && !checks.clientReferenceMatches)
+			throw new Error(`Provider reference mismatch: ${JSON.stringify(checks)}`);
 		stage = "checkout-url";
 		const checkoutUrl = trustedCheckoutUrl(
 			remote.checkout_url,
