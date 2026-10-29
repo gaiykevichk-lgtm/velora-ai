@@ -233,3 +233,19 @@ test("partial/unverified payments never credit and mismatched paid orders go to 
 	assert.equal(pool.state.status, "review");
 	assert.equal(pool.state.ledger, 0);
 });
+
+test("Infini envelope is unwrapped and provider errors surface their code", async () => {
+	const cfg = { apiBase: "https://x.test", keyId: "k", secret: "s" };
+	const ok = await infiniRequest(cfg, "GET", "/v1/a", undefined, async () => ({
+		ok: true,
+		json: async () => ({ code: 0, message: "", data: { order_id: "o1" } }),
+	}));
+	assert.equal(ok.order_id, "o1");
+	await assert.rejects(
+		infiniRequest(cfg, "POST", "/v1/a", {}, async () => ({
+			ok: true,
+			json: async () => ({ code: 40901, message: "Duplicate request_id", data: {} }),
+		})),
+		(e) => e.providerCode === 40901,
+	);
+});

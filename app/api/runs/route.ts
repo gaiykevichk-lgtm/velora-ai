@@ -184,6 +184,7 @@ export async function POST(req: NextRequest) {
 			if (e instanceof ConfigurationError) return failure(e);
 			return NextResponse.json(
 				{
+					...(process.env.VELORA_DEBUG_ERRORS === "1" ? { debug: (e as Error).message.slice(0, 300) } : {}),
 					error:
 						mode === "image" && /requested format/.test((e as Error).message)
 							? "The image provider could not produce the selected format. Your tokens were returned."

@@ -100,6 +100,18 @@ export async function POST(req: NextRequest) {
 		});
 		} catch (providerError) {
 			console.error("[payments] checkout creation failed", { orderId: order.id, error: (providerError as Error).message });
+			// The provider already knows this request_id but we never stored its
+			// checkout link (older failed attempt): retire it so a new order is made.
+			if ((providerError as { providerCode?: number }).providerCode === 40901) {
+				await pool.query(
+					"UPDATE payment_orders SET status='expired',updated_at=now() WHERE id=$1 AND checkout_url IS NULL AND status IN ('creating','pending')",
+					[order.id],
+				);
+				return NextResponse.json(
+					{ error: "Please try again to open a fresh payment page.", code: "STALE_ORDER" },
+					{ status: 409 },
+				);
+			}
 			return NextResponse.json(
 				{ error: "The payment page could not be opened right now. You were not charged. Please try again in a few minutes or use bank transfer.", code: "CHECKOUT_PROVIDER" },
 				{ status: 502 },

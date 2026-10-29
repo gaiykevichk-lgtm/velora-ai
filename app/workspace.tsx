@@ -897,13 +897,25 @@ export function Workspace() {
 			const requestId = sessionStorage.getItem(key) || crypto.randomUUID();
 			sessionStorage.setItem(key, requestId);
 			setCheckoutRequest({ packageId, requestId });
-			const result = await request<{ checkoutUrl: string; orderId: string }>(
-				"/api/payments/checkout",
-				{
-					method: "POST",
-					body: JSON.stringify({ packageId, requestId }),
-				},
-			);
+			const open = (id: string) =>
+				request<{ checkoutUrl: string; orderId: string }>(
+					"/api/payments/checkout",
+					{
+						method: "POST",
+						body: JSON.stringify({ packageId, requestId: id }),
+					},
+				);
+			let result;
+			try {
+				result = await open(requestId);
+			} catch (first) {
+				if (!/fresh payment page/i.test((first as Error).message)) throw first;
+				// The stored order could not be resumed: start a new one.
+				const fresh = crypto.randomUUID();
+				sessionStorage.setItem(key, fresh);
+				setCheckoutRequest({ packageId, requestId: fresh });
+				result = await open(fresh);
+			}
 			window.location.assign(result.checkoutUrl);
 		} catch (e) {
 			setError((e as Error).message);
