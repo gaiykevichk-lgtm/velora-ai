@@ -3,16 +3,24 @@ import { z } from "zod";
 import { user } from "@/lib/auth";
 import { dbAsync } from "@/lib/db";
 import { failure, originAllowed, unauthorized } from "@/lib/api";
-import { TOKEN_PACKAGES } from "@/lib/commerce";
+import {
+	CARD_MAX_EUR,
+	CARD_MIN_EUR,
+	TOKEN_PACKAGES,
+	TOKENS_PER_EUR,
+} from "@/lib/commerce";
 import { ConfigurationError } from "@/lib/configuration";
 import { paymentConfig, type PaymentOrder } from "@/lib/payments";
 import { infiniRequest, trustedCheckoutUrl } from "@/lib/infini.mjs";
 
 export const runtime = "nodejs";
-const schema = z.object({
-	packageId: z.enum(["starter", "professional"]),
-	requestId: z.string().uuid(),
-});
+const schema = z
+	.object({
+		packageId: z.enum(["starter", "professional"]).optional(),
+		eurAmount: z.number().int().min(CARD_MIN_EUR).max(CARD_MAX_EUR).optional(),
+		requestId: z.string().uuid(),
+	})
+	.refine((v) => (v.packageId === undefined) !== (v.eurAmount === undefined));
 export async function POST(req: NextRequest) {
 	let stage = "start";
 	try {
@@ -28,12 +36,18 @@ export async function POST(req: NextRequest) {
 		const parsed = schema.safeParse(await req.json().catch(() => null));
 		if (!parsed.success)
 			return NextResponse.json(
-				{ error: "Choose a valid package and request ID." },
+				{ error: `Choose an amount between €${CARD_MIN_EUR} and €${CARD_MAX_EUR.toLocaleString("en-US")}.` },
 				{ status: 400 },
 			);
 		stage = "order";
-		const { packageId, requestId } = parsed.data;
-		const pack = TOKEN_PACKAGES[packageId];
+		const { requestId } = parsed.data;
+		const pack = parsed.data.packageId
+			? TOKEN_PACKAGES[parsed.data.packageId]
+			: {
+					priceEur: parsed.data.eurAmount as number,
+					tokens: (parsed.data.eurAmount as number) * TOKENS_PER_EUR,
+				};
+		const packageId = parsed.data.packageId ?? "custom";
 		const pool = await dbAsync();
 		// Limit only new orders. Network retries must reuse their existing UUID.
 		const exists = await pool.query(
@@ -67,7 +81,11 @@ export async function POST(req: NextRequest) {
 			[requestId, account.id],
 		);
 		const order = rows[0] as PaymentOrder | undefined;
-		if (!order || order.package_id !== packageId)
+		if (
+			!order ||
+			order.package_id !== packageId ||
+			Number(order.eur_amount) !== pack.priceEur
+		)
 			return NextResponse.json(
 				{ error: "Order ID is already in use." },
 				{ status: 409 },

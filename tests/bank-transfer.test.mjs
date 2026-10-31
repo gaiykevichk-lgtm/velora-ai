@@ -135,7 +135,12 @@ test("routes enforce buyer auth, verified email, admin-only decisions and eviden
 	assert.doesNotMatch(reported, /tokens=tokens/);
 	const ui = readFileSync("app/workspace.tsx", "utf8");
 	assert.match(ui, /Bank transfer \(€2–€2,500\)/);
-	assert.match(ui, /Amount between €2 and €2,500/);
+	assert.match(ui, /Exact amount, €\{min\}–€\{max/);
+	assert.match(ui, /id="bank-eur"[\s\S]*min=\{2\}[\s\S]*max=\{2500\}/);
+	// Typing must not rewrite digits: the range is checked only on confirm.
+	assert.match(ui, /parseEur\(bankText, 2, 2500\)/);
+	assert.match(ui, /parseEur\(cardText, CARD_MIN_EUR, CARD_MAX_EUR\)/);
+	assert.doesNotMatch(ui, /Math\.min\(2500, Number\(e\.target\.value\)/);
 	// The duplicate "custom amount" invoice form is gone: one purchase process.
 	assert.doesNotMatch(ui, /customEur|Custom amount \(invoice order\)/);
 	assert.match(ui, /min=\{2\}[\s\S]*max=\{2500\}/);

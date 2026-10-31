@@ -14,3 +14,7 @@ export const TOKEN_PACKAGES = {
 	},
 } as const;
 export const TOKEN_VALIDITY_MONTHS = 12;
+// Card checkout accepts any whole-euro amount in this range (100 tokens per EUR).
+export const CARD_MIN_EUR = 20;
+export const CARD_MAX_EUR = 2500;
+export const TOKENS_PER_EUR = 100;

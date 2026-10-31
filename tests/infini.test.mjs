@@ -249,3 +249,14 @@ test("Infini envelope is unwrapped and provider errors surface their code", asyn
 		(e) => e.providerCode === 40901,
 	);
 });
+
+test("card checkout accepts a chosen whole-euro amount at 100 tokens per EUR", async () => {
+	const { readFileSync } = await import("node:fs");
+	const route = readFileSync("app/api/payments/checkout/route.ts", "utf8");
+	const commerce = readFileSync("lib/commerce.ts", "utf8");
+	assert.match(commerce, /CARD_MIN_EUR = 20/);
+	assert.match(commerce, /CARD_MAX_EUR = 2500/);
+	assert.match(commerce, /TOKENS_PER_EUR = 100/);
+	assert.match(route, /eurAmount: z\.number\(\)\.int\(\)\.min\(CARD_MIN_EUR\)\.max\(CARD_MAX_EUR\)/);
+	assert.match(route, /Number\(order\.eur_amount\) !== pack\.priceEur/);
+});

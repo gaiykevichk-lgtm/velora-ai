@@ -15,7 +15,12 @@ import {
 	Plus,
 	X,
 } from "lucide-react";
-import { TOKEN_PACKAGES } from "@/lib/commerce";
+import {
+	CARD_MAX_EUR,
+	CARD_MIN_EUR,
+	TOKEN_PACKAGES,
+	TOKENS_PER_EUR,
+} from "@/lib/commerce";
 import { presets } from "@/lib/presets";
 import { VeloraLogo } from "./logo";
 
@@ -116,6 +121,63 @@ function CopyText({ text }: { text: string }) {
 		>
 			{copied ? "Copied" : "Copy"}
 		</button>
+	);
+}
+// Whole-euro amount as text: digits only while typing, so nothing is rewritten
+// mid-entry and the field can be cleared. The range is checked on confirm.
+function parseEur(text: string, min: number, max: number) {
+	if (!/^\d+$/.test(text)) return { error: "Enter an amount in whole euros." };
+	const value = Number(text);
+	if (value < min || value > max)
+		return {
+			error: `Amount must be between €${min} and €${max.toLocaleString("en-US")}.`,
+		};
+	return { value };
+}
+function AmountPicker({
+	id,
+	text,
+	set,
+	min,
+	max,
+}: {
+	id: string;
+	text: string;
+	set: (v: string) => void;
+	min: number;
+	max: number;
+}) {
+	const shown = Math.min(max, Math.max(min, Number(text) || min));
+	return (
+		<div className="mt-3">
+			<input
+				type="range"
+				aria-label="Amount in euros"
+				min={min}
+				max={max}
+				step={1}
+				value={shown}
+				onChange={(e) => set(e.target.value)}
+				className="w-full accent-[#f54900]"
+			/>
+			<div className="mt-1 flex justify-between text-[11px] text-[#8a7e6f]">
+				<span>€{min}</span>
+				<span>€{max.toLocaleString("en-US")}</span>
+			</div>
+			<label className="mt-2 block text-xs text-[#b8ac90]" htmlFor={id}>
+				Exact amount, €{min}–€{max.toLocaleString("en-US")}, step €1
+			</label>
+			<input
+				id={id}
+				type="text"
+				inputMode="numeric"
+				autoComplete="off"
+				placeholder={String(min)}
+				value={text}
+				onChange={(e) => set(e.target.value.replace(/\D/g, "").slice(0, 5))}
+				className="mt-1 w-28 bg-[#24160c] border border-[#3a2a1a] text-sm text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
+			/>
+		</div>
 	);
 }
 function BankField({
@@ -483,6 +545,22 @@ type Run = {
 	created_at?: string;
 };
 const ACTIVE = ["pending", "queued", "processing"];
+// One card per run: a late history response or a duplicate append must never
+// bring back an "In queue" card for a run that already finished.
+function mergeRuns(base: Run[], incoming: Run[]) {
+	const byId = new Map<string, Run>();
+	for (const run of [...base, ...incoming]) {
+		const prev = byId.get(run.id);
+		// A finished copy always wins over an active one; otherwise the later wins.
+		byId.set(
+			run.id,
+			prev && !ACTIVE.includes(prev.status) && ACTIVE.includes(run.status)
+				? prev
+				: run,
+		);
+	}
+	return [...byId.values()];
+}
 const STATUS_LABEL: Record<string, string> = {
 	pending: "In queue",
 	queued: "In queue",
@@ -581,7 +659,8 @@ export function Workspace() {
 	} | null>(null);
 	const [orderMsg, setOrderMsg] = useState("");
 	const [adminBusyId, setAdminBusyId] = useState("");
-	const [bankEur, setBankEur] = useState(20);
+	const [bankText, setBankText] = useState("20");
+	const [cardText, setCardText] = useState("20");
 	const [bankKind, setBankKind] = useState<"person" | "company">("person");
 	const [bankBuyer, setBankBuyer] = useState<BankBuyer>({
 		fullName: "",
@@ -685,7 +764,7 @@ export function Workspace() {
 			try {
 				const data = await request<{ runs: Run[]; tokens?: number; reserved?: number }>(`/api/runs?workspaceId=${encodeURIComponent(activeId)}`, { signal: controller.signal });
 				if (!controller.signal.aborted) {
-					setRuns(data.runs);
+					setRuns((prev) => mergeRuns(data.runs, prev));
 					if (typeof data.tokens === "number") setTokens(data.tokens);
 					if (typeof data.reserved === "number") setReserved(data.reserved);
 				}
@@ -783,12 +862,20 @@ export function Workspace() {
 			setAuthOpen(true);
 			return;
 		}
+		const amount = parseEur(bankText, 2, 2500);
+		if (amount.value === undefined) {
+			setError(amount.error);
+			return;
+		}
 		setBusy(true);
 		setError("");
 		setOrderMsg("");
 		try {
-			const requestId = bankRequestId ?? crypto.randomUUID();
-			setBankRequestId(requestId);
+			// Retries of the same amount reuse the ID; a new amount is a new order.
+			const requestId = bankRequestId?.startsWith(`${amount.value}:`)
+				? bankRequestId.slice(String(amount.value).length + 1)
+				: crypto.randomUUID();
+			setBankRequestId(`${amount.value}:${requestId}`);
 			const res = await request<{
 				order: {
 					id: string;
@@ -801,7 +888,7 @@ export function Workspace() {
 			}>("/api/bank-transfer/orders", {
 				method: "POST",
 				body: JSON.stringify({
-					eurAmount: bankEur,
+					eurAmount: amount.value,
 					requestId,
 					acceptedTerms: bankAccepted,
 					buyer: { kind: bankKind, email: account.email, ...bankBuyer },
@@ -883,26 +970,32 @@ export function Workspace() {
 			void refreshPayments(searchParams.get("paymentOrder") || undefined);
 	}, [topupOpen, account, refreshPayments, searchParams]);
 
-	async function checkout(packageId: keyof typeof TOKEN_PACKAGES) {
+	async function checkout() {
 		if (!account) {
 			setAuthOpen(true);
 			return;
 		}
+		const amount = parseEur(cardText, CARD_MIN_EUR, CARD_MAX_EUR);
+		if (amount.value === undefined) {
+			setError(amount.error);
+			return;
+		}
+		const eurAmount = amount.value;
 		setBusy(true);
 		setError("");
 		setOrderMsg("");
-		// Keep UUID across ambiguous timeouts/reloads and switching back to the same package.
-		const key = `velora-checkout:${account.id}:${packageId}`;
+		// Keep UUID across ambiguous timeouts/reloads and switching back to the same amount.
+		const key = `velora-checkout:${account.id}:eur${eurAmount}`;
 		try {
 			const requestId = sessionStorage.getItem(key) || crypto.randomUUID();
 			sessionStorage.setItem(key, requestId);
-			setCheckoutRequest({ packageId, requestId });
+			setCheckoutRequest({ packageId: `€${eurAmount}`, requestId });
 			const open = (id: string) =>
 				request<{ checkoutUrl: string; orderId: string }>(
 					"/api/payments/checkout",
 					{
 						method: "POST",
-						body: JSON.stringify({ packageId, requestId: id }),
+						body: JSON.stringify({ eurAmount, requestId: id }),
 					},
 				);
 			let result;
@@ -913,7 +1006,7 @@ export function Workspace() {
 				// The stored order could not be resumed: start a new one.
 				const fresh = crypto.randomUUID();
 				sessionStorage.setItem(key, fresh);
-				setCheckoutRequest({ packageId, requestId: fresh });
+				setCheckoutRequest({ packageId: `€${eurAmount}`, requestId: fresh });
 				result = await open(fresh);
 			}
 			window.location.assign(result.checkoutUrl);
@@ -1115,7 +1208,7 @@ export function Workspace() {
 					duration,
 				}),
 			});
-			setRuns((prev) => [...prev, data.run]);
+			setRuns((prev) => mergeRuns(prev, [data.run]));
 			if (typeof data.reserved === "number") setReserved(data.reserved);
 			if (typeof data.tokens === "number") {
 				setTokens(data.tokens);
@@ -1561,7 +1654,8 @@ export function Workspace() {
 												</div>
 											) : run.result?.startsWith("https://") ||
 												run.result?.startsWith("data:image/") ||
-												run.result?.startsWith("/api/video-content") ? (
+												run.result?.startsWith("/api/video-content") ||
+												run.result?.startsWith("/api/media") ? (
 												run.mode === "image" ? (
 													<img
 														src={run.result}
@@ -1654,44 +1748,60 @@ export function Workspace() {
 								{orderMsg}
 							</div>
 						)}
-						<div className="grid grid-cols-2 gap-3 mb-6">
-							{Object.entries(TOKEN_PACKAGES).map(([id, p]) => (
-								<button
-									key={id}
-									type="button"
-									disabled={busy || !onlineEnabled || !account || !paymentsLoaded}
-									title={
-										!account
-											? "Sign in to pay by card"
-											: !paymentsLoaded
-												? "Loading payment methods"
-												: onlineEnabled
-													? "Continue to Infini"
-													: "Card payments are temporarily unavailable"
-									}
-									onClick={() =>
-										void checkout(id as keyof typeof TOKEN_PACKAGES)
-									}
-									className="bg-[#120a05] border border-[#3a2a1a] p-4 rounded-xl text-left hover:border-[#f54900] transition-colors disabled:opacity-60"
-								>
-									<div className="text-xs text-[#8a7e6f]">{p.label}</div>
-									<div className="text-2xl font-black text-white mt-1">
-										€{p.priceEur}
-									</div>
-									<div className="text-xs text-[#f3913e] mt-1">
-										{p.tokens.toLocaleString("en-US")} tokens
-									</div>
-									<div className="text-xs mt-2 text-[#ffe4a6] font-bold">
-										{!account
-											? "Sign in to pay by card"
-											: !paymentsLoaded
-												? "Loading payment methods…"
-												: onlineEnabled
-													? "Pay with Infini ↗"
-													: "Online payment unavailable"}
-									</div>
-								</button>
-							))}
+						<div className="mb-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
+							<div className="text-xs text-[#8a7e6f] font-bold uppercase">
+								Card payment (€{CARD_MIN_EUR}–€{CARD_MAX_EUR.toLocaleString("en-US")})
+							</div>
+							<div className="mt-3 flex gap-2 text-xs">
+								{Object.entries(TOKEN_PACKAGES).map(([id, p]) => (
+									<button
+										key={id}
+										type="button"
+										onClick={() => setCardText(String(p.priceEur))}
+										className={`rounded-full px-3 py-1.5 border ${cardText === String(p.priceEur) ? "border-[#f54900] text-white" : "border-[#3a2a1a] text-[#8a7e6f]"}`}
+									>
+										€{p.priceEur} · {p.tokens.toLocaleString("en-US")} tokens
+									</button>
+								))}
+							</div>
+							<div className="mt-3 flex items-baseline justify-between gap-3">
+								<span className="text-2xl font-black text-white">
+									€{Number(cardText) || 0}
+								</span>
+								<span className="text-sm font-bold text-[#f3913e]">
+									{((Number(cardText) || 0) * TOKENS_PER_EUR).toLocaleString("en-US")} tokens
+								</span>
+							</div>
+							<AmountPicker
+								id="card-eur"
+								text={cardText}
+								set={setCardText}
+								min={CARD_MIN_EUR}
+								max={CARD_MAX_EUR}
+							/>
+							<button
+								type="button"
+								disabled={busy || !onlineEnabled || !account || !paymentsLoaded}
+								title={
+									!account
+										? "Sign in to pay by card"
+										: !paymentsLoaded
+											? "Loading payment methods"
+											: onlineEnabled
+												? "Continue to Infini"
+												: "Card payments are temporarily unavailable"
+								}
+								onClick={() => void checkout()}
+								className="mt-4 w-full rounded-xl bg-[#f54900] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+							>
+								{!account
+									? "Sign in to pay by card"
+									: !paymentsLoaded
+										? "Loading payment methods…"
+										: onlineEnabled
+											? `Pay €${Number(cardText) || 0} with Infini ↗`
+											: "Online payment unavailable"}
+							</button>
 						</div>
 
 						{!account && (
@@ -1790,14 +1900,16 @@ export function Workspace() {
 											type="button"
 											className="block mt-2 underline"
 											onClick={() => {
-												for (const id of Object.keys(TOKEN_PACKAGES)) {
-													const key = `velora-checkout:${account?.id}:${id}`;
-													if (sessionStorage.getItem(key) === o.id)
+												for (const key of Object.keys(sessionStorage)) {
+													if (
+														key.startsWith(`velora-checkout:${account?.id}:`) &&
+														sessionStorage.getItem(key) === o.id
+													)
 														sessionStorage.removeItem(key);
 												}
 												setCheckoutRequest(null);
 												setOrderMsg(
-													"You can now select a package for a new purchase.",
+													"You can now choose an amount for a new purchase.",
 												);
 											}}
 										>
@@ -1808,7 +1920,7 @@ export function Workspace() {
 							))}
 							{checkoutRequest && (
 								<p className="text-xs mt-2">
-									Retrying the same package reuses order{" "}
+									Retrying the same amount reuses order{" "}
 									{checkoutRequest.requestId.slice(0, 8)} to avoid duplicate
 									charges.
 								</p>
@@ -1820,31 +1932,18 @@ export function Workspace() {
 							</div>
 							<div className="mt-2 flex items-baseline justify-between gap-3">
 								<span className="text-2xl font-black text-white">
-									€{bankEur}
+									€{Number(bankText) || 0}
 								</span>
 								<span className="text-sm font-bold text-[#f3913e]">
-									{(bankEur * 100).toLocaleString("en-US")} tokens
+									{((Number(bankText) || 0) * TOKENS_PER_EUR).toLocaleString("en-US")} tokens
 								</span>
 							</div>
-							<label
-								className="mt-3 block text-xs text-[#b8ac90]"
-								htmlFor="bank-eur"
-							>
-								Amount between €2 and €2,500, step €1
-							</label>
-							<input
+							<AmountPicker
 								id="bank-eur"
-								type="number"
+								text={bankText}
+								set={setBankText}
 								min={2}
 								max={2500}
-								step={1}
-								value={bankEur}
-								onChange={(e) =>
-									setBankEur(
-										Math.max(2, Math.min(2500, Number(e.target.value) || 2)),
-									)
-								}
-								className="mt-2 w-28 bg-[#24160c] border border-[#3a2a1a] text-xs text-[#ffe4a6] rounded-lg px-2.5 py-2 outline-none"
 							/>
 							<div className="mt-3 flex gap-2 text-xs">
 								{(["person", "company"] as const).map((k) => (
