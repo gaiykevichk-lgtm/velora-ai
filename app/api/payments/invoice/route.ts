@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 		if (!z.string().uuid().safeParse(id).success)
 			return NextResponse.json({ error: "Invalid order." }, { status: 400 });
 		const { rows } = await (await dbAsync()).query(
-			"SELECT id,eur_amount,tokens,status,paid_at,created_at,email FROM payment_orders WHERE id=$1 AND user_id=$2",
+			"SELECT id,eur_amount,tokens,status,paid_at,created_at,email,provider_order_id FROM payment_orders WHERE id=$1 AND user_id=$2",
 			[id, account.id],
 		);
 		const o = rows[0];
@@ -30,10 +30,15 @@ export async function GET(req: NextRequest) {
 			`Date: ${date.toISOString().slice(0, 10)}`,
 			`Seller: ${COMPANY.name}, ${COMPANY.address}`,
 			`Seller registration: ${COMPANY.registration}`,
-			`Buyer: ${o.email}`,
+			`Seller VAT ID: FR81107643348`,
+			`Buyer email: ${o.email}`,
 			`Item: Prepaid Velora AI tokens (usage units for AI generation)`,
 			`Quantity: ${Number(o.tokens).toLocaleString("en-US")} tokens   Total: ${Number(o.eur_amount).toFixed(2)} EUR`,
-			`Payment method: card, processed by Infini. Payment confirmed by the provider.`,
+			`Payment method: Card`,
+			...(o.provider_order_id ? [`Provider order reference: ${o.provider_order_id}`] : []),
+			`Status: Paid`,
+			`Total paid: ${Number(o.eur_amount).toFixed(2)} EUR`,
+			`${Number(o.tokens).toLocaleString("en-US")} tokens credited to your balance.`,
 			`Tokens valid 12 months from the credit date.`,
 		]);
 		return new NextResponse(new Uint8Array(pdf), {
