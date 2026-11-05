@@ -48,6 +48,8 @@ export async function deliverPurchaseReceipt(method: Method, orderId: string) {
 			method === "card"
 				? `/api/payments/invoice?orderId=${encodeURIComponent(order.id)}`
 				: `/api/bank-transfer/documents?kind=document&doc=${encodeURIComponent(order.invoice_id)}`;
+        // Match the invoice ledger, including a confirmed overpayment.
+        const paid = method === "bank" ? (await pool.query("SELECT COALESCE(SUM(amount_cents),0)::int AS paid FROM bank_payments WHERE order_id=$1", [orderId])).rows[0] : null;
 		const content = purchaseReceipt({
 			status: order.status,
 			email: order.email,
@@ -57,7 +59,7 @@ export async function deliverPurchaseReceipt(method: Method, orderId: string) {
 			date: date.toISOString().slice(0, 10),
 			method: method === "card" ? "Card" : "Bank transfer",
 			tokens: Number(order.tokens),
-			amount: Number(order.eur_amount),
+			amount: method === "bank" ? Number(paid.paid) / 100 : Number(order.eur_amount),
 		});
 		const stored = await pool.query("UPDATE purchase_receipt_outbox SET payload=COALESCE(payload,$3::jsonb),first_attempt_at=COALESCE(first_attempt_at,now()) WHERE method=$1 AND order_id=$2 RETURNING payload", [method,orderId,JSON.stringify({to:order.email,...content})]);
         const message = stored.rows[0].payload;

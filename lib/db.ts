@@ -111,10 +111,10 @@ export function db(): Pool | Queryable {
 let schemaReady: Promise<void> | undefined;
 // Idempotent migrations for databases created before a column/table existed.
 const MIGRATIONS = [
- "ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS invoice_number text UNIQUE",
- "ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS buyer_name text",
- "ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS payload jsonb",
- "ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS first_attempt_at timestamptz",
+	"ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS invoice_number text UNIQUE",
+	"ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS buyer_name text",
+	"ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS payload jsonb",
+	"ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS first_attempt_at timestamptz",
 	"ALTER TABLE runs DROP CONSTRAINT IF EXISTS runs_status_check",
 	"ALTER TABLE runs ADD CONSTRAINT runs_status_check CHECK(status IN ('pending','queued','processing','completed','failed'))",
 	"ALTER TABLE runs ADD COLUMN IF NOT EXISTS aspect_ratio text",

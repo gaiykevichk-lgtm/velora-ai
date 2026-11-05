@@ -4,13 +4,14 @@ import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { purchaseReceipt } from "../lib/purchase-receipt.mjs";
-function setup({ status = "credited", fail = false } = {}) {
+function setup({ status = "credited", fail = false, paidCents = 2000 } = {}) {
 	let state = "pending",
 		sends = 0,
 		key,
 		payload;
 	const pool = {
 		async query(sql, args) {
+            if(sql.startsWith('SELECT COALESCE(SUM(amount_cents)')) return {rows:[{paid:paidCents}]};
 			if (
 				sql.startsWith("UPDATE purchase_receipt_outbox SET state='sending'")
 			) {
@@ -115,3 +116,8 @@ test("uncredited order and ambiguous delivery do not automatically retry", async
 });
 
 test('bank receipt uses its own invoice, name, amount and tokens and sends once',async()=>{const s=setup();await s.deliver('bank','01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa');await s.deliver('bank','01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa');assert.equal(s.sends,1);assert.match(s.payload[2],/Test Buyer/);assert.match(s.payload[2],/Bank transfer/);assert.match(s.payload[2],/doc=bank-invoice-id/);assert.match(s.payload[2],/€20.00/);});
+
+test('bank receipt shows actual paid EUR matching invoice total on overpayment', async()=>{
+ const s=setup({paidCents:2200});await s.deliver('bank','01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+ assert.match(s.payload[2],/Amount paid: €22.00/);
+});
