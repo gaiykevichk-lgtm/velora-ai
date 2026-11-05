@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 		const pool = await dbAsync();
 		if (kind === "document" && doc) {
 			const row = (await pool.query(
-				"SELECT d.kind,d.doc_number,d.payload,o.user_id,o.public_number,o.eur_amount,o.tokens,o.buyer,o.seller,o.confirmed_at,o.terms_version FROM bank_order_documents d JOIN bank_orders o ON o.id=d.order_id WHERE d.id=$1",
+				"SELECT d.kind,d.doc_number,d.payload,o.id AS order_id,o.user_id,o.email,o.status,o.public_number,o.eur_amount,o.tokens,o.buyer,o.seller,o.confirmed_at,o.terms_version FROM bank_order_documents d JOIN bank_orders o ON o.id=d.order_id WHERE d.id=$1",
 				[doc],
 			)).rows[0];
 			if (!row) return NextResponse.json({ error: "Document not found." }, { status: 404 });
@@ -29,17 +29,23 @@ export async function GET(req: NextRequest) {
 			const b = row.buyer as Record<string, string>;
 			const sl = row.seller as Record<string, string>;
 			const buyerName = row.buyer.kind === "company" ? `${b.legalName}, reg. ${b.regNumber}` : b.fullName;
+			const payments = row.status === "credited" ? (await pool.query("SELECT amount_cents,bank_ref,payment_ref FROM bank_payments WHERE order_id=$1 ORDER BY received_date,created_at", [row.order_id])).rows : [];
+			const paidCents = payments.reduce((total: number, payment: { amount_cents: number }) => total + Number(payment.amount_cents), 0);
+			const paid = row.status === "credited" && paidCents >= Number(row.eur_amount) * 100;
+			const refs = payments.map((payment: { bank_ref: string | null; payment_ref: string | null }) => payment.bank_ref || payment.payment_ref).filter(Boolean);
 			const pdf = textPdf(`${row.kind} ${row.doc_number}`, [
 				`${String(row.kind).toUpperCase()} ${row.doc_number}`,
 				`Date: ${new Date(row.confirmed_at).toISOString().slice(0, 10)}   Order: ${row.public_number}`,
 				`Seller: ${sl.legalName}, ${sl.address}`,
 				`Seller registration: ${COMPANY.registration}`,
 				`Buyer: ${buyerName}, ${b.country}`,
+				`Buyer email: ${row.email}`,
 				`Item: Prepaid Velora AI tokens (usage units for AI generation)`,
-				`Quantity: ${Number(row.tokens).toLocaleString("en-US")} tokens   Total: ${Number(row.eur_amount).toFixed(2)} EUR`,
+				`Quantity: ${Number(row.tokens).toLocaleString("en-US")} tokens   Amount: ${Number(row.eur_amount).toFixed(2)} EUR`,
+				`Payment method: Bank transfer`,
+				...(paid ? [`Status: Paid`, `Total paid: ${(paidCents / 100).toFixed(2)} EUR`, `${Number(row.tokens).toLocaleString("en-US")} tokens credited to your balance.`, ...(refs.length ? [`Payment reference: ${refs.join(", ")}`] : [])] : [`Status: ${row.status}`, `Transfer reference: Invoice ${row.doc_number}`]),
+				`Seller VAT ID: FR81107643348`,
 				`Tokens valid 12 months from the credit date. Terms version ${row.terms_version}.`,
-				`Tax: price shown is the total payable in EUR; tax details as stated by the seller on this document.`,
-				`Payment reference: Invoice ${row.doc_number}`,
 				`IBAN ${sl.iban}   BIC ${sl.bic}   Bank ${sl.bank}`,
 			]);
 			return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${row.kind}-${row.doc_number}.pdf"` } });
