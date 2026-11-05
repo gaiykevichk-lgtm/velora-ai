@@ -7,6 +7,7 @@ import { dbAsync } from "@/lib/db";
 import { failure, unauthorized } from "@/lib/api";
 import { bankConfig, textPdf } from "@/lib/bank-transfer";
 import { COMPANY } from "@/lib/company";
+import { invoicePdf } from "@/lib/invoice-pdf.mjs";
 import { bankInvoicePayment } from "@/lib/bank-invoice-state.mjs";
 
 export const runtime = "nodejs";
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
 	try {
 		const cfg = bankConfig();
 		const account = await user();
-		if (!account) return unauthorized();
+		if (!account) return NextResponse.redirect(new URL(`/studio?auth=login&returnTo=${encodeURIComponent(req.nextUrl.pathname+req.nextUrl.search)}`,req.url));
 		const kind = req.nextUrl.searchParams.get("kind");
 		const doc = req.nextUrl.searchParams.get("doc");
 		const evidenceId = req.nextUrl.searchParams.get("evidenceId");
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
 						).rows
 					: [];
 			const { paid, paidCents, refs } = bankInvoicePayment(row, payments);
-			const pdf = textPdf(`${row.kind} ${row.doc_number}`, [
+			const pdf = row.kind === "invoice" ? await invoicePdf({number:row.doc_number,date:new Date(row.confirmed_at).toISOString().slice(0,10),email:row.email,buyerName,method:"Bank transfer",reference:refs.join(", "),amount:Number(row.eur_amount),tokens:Number(row.tokens),paid,totalPaid:paidCents/100,status:row.status === "credited" ? "Review" : row.status}) : textPdf(`${row.kind} ${row.doc_number}`, [
 				`${String(row.kind).toUpperCase()} ${row.doc_number}`,
 				`Date: ${new Date(row.confirmed_at).toISOString().slice(0, 10)}   Order: ${row.public_number}`,
 				`Seller: ${sl.legalName}, ${sl.address}`,

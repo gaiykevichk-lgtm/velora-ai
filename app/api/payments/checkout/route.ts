@@ -19,6 +19,7 @@ const schema = z
 		packageId: z.enum(["starter", "professional"]).optional(),
 		eurAmount: z.number().int().min(CARD_MIN_EUR).max(CARD_MAX_EUR).optional(),
 		requestId: z.string().uuid(),
+        buyerName: z.string().trim().min(2).max(200),
 	})
 	.refine((v) => (v.packageId === undefined) !== (v.eurAmount === undefined));
 export async function POST(req: NextRequest) {
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
 				);
 		}
 		await pool.query(
-			"INSERT INTO payment_orders (id,user_id,email,package_id,eur_amount,tokens) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING",
+			"INSERT INTO payment_orders (id,user_id,email,package_id,eur_amount,tokens,buyer_name) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING",
 			[
 				requestId,
 				account.id,
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
 				packageId,
 				pack.priceEur,
 				pack.tokens,
+                parsed.data.buyerName,
 			],
 		);
 		const { rows } = await pool.query(

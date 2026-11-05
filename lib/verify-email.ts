@@ -26,9 +26,7 @@ export function verificationConfig() {
 
 export function mailFrom() {
 	return (
-		process.env.BANK_MAIL_FROM?.trim() ||
-		process.env.SMTP_FROM?.trim() ||
-		""
+		process.env.BANK_MAIL_FROM?.trim() || process.env.SMTP_FROM?.trim() || ""
 	);
 }
 
@@ -163,10 +161,13 @@ async function smtpSend(opts: {
 		await send("DATA\r\n");
 		await ready([354]);
 		const boundary = `velora-${randomBytes(18).toString("hex")}`;
-		const encode = (s: string) => Buffer.from(s, "utf8").toString("base64").replace(/.{1,76}/g, "$&\r\n");
+		const encode = (s: string) =>
+			Buffer.from(s, "utf8")
+				.toString("base64")
+				.replace(/.{1,76}/g, "$&\r\n");
 		const content = opts.html
 			? `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n--${boundary}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${encode(opts.text)}--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${encode(opts.html)}--${boundary}--\r\n`
-			: `Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${opts.text.replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..") }\r\n`;
+			: `Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${opts.text.replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..")}\r\n`;
 		const body = `From: ${escapeHeader(opts.from)}\r\nTo: ${escapeHeader(opts.to)}\r\nSubject: =?UTF-8?B?${b64(escapeHeader(opts.subject))}?=\r\n${content}.\r\n`;
 		await send(body);
 		await ready([250]);
@@ -192,12 +193,16 @@ async function resendSend(opts: {
 	subject: string;
 	text: string;
 	html?: string;
+	idempotencyKey?: string;
 }) {
 	const res = await fetch("https://api.resend.com/emails", {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${opts.apiKey}`,
 			"Content-Type": "application/json",
+			...(opts.idempotencyKey
+				? { "Idempotency-Key": opts.idempotencyKey }
+				: {}),
 		},
 		body: JSON.stringify({
 			from: opts.from,
@@ -216,11 +221,26 @@ async function resendSend(opts: {
 	return body?.id ?? "";
 }
 
-async function deliverMail(to: string, subject: string, text: string, html?: string) {
+async function deliverMail(
+	to: string,
+	subject: string,
+	text: string,
+	html?: string,
+	idempotencyKey?: string,
+) {
 	const from = mailFrom();
 	if (!from) throw new Error("Mail sender is not configured.");
 	const apiKey = process.env.RESEND_API_KEY?.trim();
-	if (apiKey) return resendSend({ apiKey, from, to, subject, text, html });
+	if (apiKey)
+		return resendSend({
+			apiKey,
+			from,
+			to,
+			subject,
+			text,
+			html,
+			idempotencyKey,
+		});
 	const cfg = verificationConfig();
 	if (!cfg)
 		throw new Error("Mail transport is not configured (set RESEND_API_KEY).");
@@ -242,15 +262,24 @@ export async function sendPlainMail(to: string, subject: string, text: string) {
 	if (!mailConfigured()) return { sent: false as const, messageId: "" };
 	try {
 		const messageId = await deliverMail(to, subject, text);
-		return { sent: true as const, messageId: messageId || `mail-${Date.now()}` };
+		return {
+			sent: true as const,
+			messageId: messageId || `mail-${Date.now()}`,
+		};
 	} catch (e) {
 		throw new Error(`Mail transport failed: ${(e as Error).message}`);
 	}
 }
 
-export async function sendHtmlMail(to: string, subject: string, text: string, html: string) {
+export async function sendHtmlMail(
+	to: string,
+	subject: string,
+	text: string,
+	html: string,
+	idempotencyKey?: string,
+) {
 	if (!mailConfigured()) return { sent: false as const, messageId: "" };
-	const messageId = await deliverMail(to, subject, text, html);
+	const messageId = await deliverMail(to, subject, text, html, idempotencyKey);
 	return { sent: true as const, messageId: messageId || `mail-${Date.now()}` };
 }
 

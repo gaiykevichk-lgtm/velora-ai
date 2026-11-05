@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS bank_mail_log (order_id uuid PRIMARY KEY REFERENCES b
 CREATE TABLE IF NOT EXISTS bank_order_documents (id uuid PRIMARY KEY, order_id uuid NOT NULL REFERENCES bank_orders(id) ON DELETE CASCADE, kind text NOT NULL CHECK(kind IN ('confirmation','invoice','receipt')), doc_number text NOT NULL UNIQUE, version int NOT NULL DEFAULT 1, payload jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS bank_audit_log (id uuid PRIMARY KEY, order_id uuid REFERENCES bank_orders(id) ON DELETE SET NULL, actor_email text NOT NULL, action text NOT NULL, detail jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS idx_bank_audit_order ON bank_audit_log(order_id, created_at);
-CREATE TABLE IF NOT EXISTS payment_events (event_id text PRIMARY KEY, order_id uuid NOT NULL REFERENCES payment_orders(id), kind text NOT NULL, payload_hash text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());`;
+CREATE TABLE IF NOT EXISTS payment_events (event_id text PRIMARY KEY, order_id uuid NOT NULL REFERENCES payment_orders(id), kind text NOT NULL, payload_hash text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS purchase_receipt_outbox (method text NOT NULL CHECK(method IN ('card','bank')), order_id uuid NOT NULL, state text NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','sending','sent','failed')), attempts int NOT NULL DEFAULT 0, last_error text, message_id text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), sent_at timestamptz, PRIMARY KEY(method,order_id));`;
 
 async function memoryDb(): Promise<Queryable> {
 	if (!globalThis.__veloraMemDb) {
@@ -110,6 +111,10 @@ export function db(): Pool | Queryable {
 let schemaReady: Promise<void> | undefined;
 // Idempotent migrations for databases created before a column/table existed.
 const MIGRATIONS = [
+ "ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS invoice_number text UNIQUE",
+ "ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS buyer_name text",
+ "ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS payload jsonb",
+ "ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS first_attempt_at timestamptz",
 	"ALTER TABLE runs DROP CONSTRAINT IF EXISTS runs_status_check",
 	"ALTER TABLE runs ADD CONSTRAINT runs_status_check CHECK(status IN ('pending','queued','processing','completed','failed'))",
 	"ALTER TABLE runs ADD COLUMN IF NOT EXISTS aspect_ratio text",

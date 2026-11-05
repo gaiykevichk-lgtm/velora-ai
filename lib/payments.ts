@@ -1,5 +1,6 @@
 import { dbAsync } from "./db";
 import { ConfigurationError } from "./configuration";
+import { deliverPurchaseReceipt } from "./receipt-delivery";
 import {
 	confirmedOrderMatches,
 	infiniRequest,
@@ -103,4 +104,11 @@ export async function settlePayment(
 	if (!("connect" in pool))
 		throw new ConfigurationError("Payments require persistent PostgreSQL.");
 	await creditVerifiedOrder(pool, local, paid, remote.status, event);
+	if (paid) {
+		try {
+			await deliverPurchaseReceipt("card", orderId);
+		} catch (error) {
+			console.error("[receipt] card delivery failed", (error as Error).message);
+		}
+	}
 }

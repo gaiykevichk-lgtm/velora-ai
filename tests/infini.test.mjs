@@ -174,6 +174,8 @@ function transactionDouble(failLedger = false) {
 						if (failLedger) throw new Error("ledger failed");
 						state.ledger++;
 					}
+					if (sql.startsWith("INSERT INTO purchase_receipt_outbox"))
+						state.receiptJobs = (state.receiptJobs || 0) + 1;
 					if (sql.includes("SET status='credited'")) state.status = "credited";
 					if (sql.startsWith("UPDATE payment_orders SET status=$2"))
 						state.status = args[1];
@@ -205,6 +207,7 @@ test("same/different webhook IDs and status reconciliation credit once", async (
 	]);
 	assert.equal(pool.state.tokens, 2000);
 	assert.equal(pool.state.ledger, 1);
+	assert.equal(pool.state.receiptJobs, 1);
 	assert.equal(pool.state.status, "credited");
 	assert.ok(pool.calls.some((q) => q.includes("FOR UPDATE")));
 	await creditVerifiedOrder(pool, local, false, "expired");
@@ -222,6 +225,7 @@ test("failed fulfillment rolls back balance, receipt and ledger", async () => {
 	assert.equal(pool.state.tokens, 0);
 	assert.equal(pool.state.events.length, 0);
 	assert.equal(pool.state.status, "pending");
+	assert.equal(pool.state.receiptJobs || 0, 0);
 	assert.ok(pool.calls.includes("ROLLBACK"));
 });
 test("partial/unverified payments never credit and mismatched paid orders go to review", async () => {
@@ -232,6 +236,7 @@ test("partial/unverified payments never credit and mismatched paid orders go to 
 	await creditVerifiedOrder(pool, local, false, "paid");
 	assert.equal(pool.state.status, "review");
 	assert.equal(pool.state.ledger, 0);
+	assert.equal(pool.state.receiptJobs || 0, 0);
 });
 
 test("Infini envelope is unwrapped and provider errors surface their code", async () => {
@@ -244,7 +249,11 @@ test("Infini envelope is unwrapped and provider errors surface their code", asyn
 	await assert.rejects(
 		infiniRequest(cfg, "POST", "/v1/a", {}, async () => ({
 			ok: true,
-			json: async () => ({ code: 40901, message: "Duplicate request_id", data: {} }),
+			json: async () => ({
+				code: 40901,
+				message: "Duplicate request_id",
+				data: {},
+			}),
 		})),
 		(e) => e.providerCode === 40901,
 	);
@@ -257,6 +266,9 @@ test("card checkout accepts a chosen whole-euro amount at 100 tokens per EUR", a
 	assert.match(commerce, /CARD_MIN_EUR = 20/);
 	assert.match(commerce, /CARD_MAX_EUR = 2500/);
 	assert.match(commerce, /TOKENS_PER_EUR = 100/);
-	assert.match(route, /eurAmount: z\.number\(\)\.int\(\)\.min\(CARD_MIN_EUR\)\.max\(CARD_MAX_EUR\)/);
+	assert.match(
+		route,
+		/eurAmount: z\.number\(\)\.int\(\)\.min\(CARD_MIN_EUR\)\.max\(CARD_MAX_EUR\)/,
+	);
 	assert.match(route, /Number\(order\.eur_amount\) !== pack\.priceEur/);
 });

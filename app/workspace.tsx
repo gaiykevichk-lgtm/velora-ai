@@ -269,9 +269,14 @@ function BankOrderDetails({ id }: { id: string }) {
 						Download invoice (PDF)
 					</a>
 				) : null}
+                {o.status === "credited" && <RetryReceipt method="bank" id={o.id}/> }
 			</div>
 		</div>
 	);
+}
+function RetryReceipt({method,id}:{method:"card"|"bank";id:string}){
+ const [message,setMessage]=useState(""); const [busy,setBusy]=useState(false);
+ return <div><button type="button" disabled={busy} className="underline text-xs mt-2" onClick={async()=>{setBusy(true);try{const r=await fetch('/api/payments/receipt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method,orderId:id})});const d=await r.json();setMessage(r.ok?'Receipt sent.':d.error||'Unable to retry.');}catch{setMessage('Unable to retry.');}finally{setBusy(false);}}}>Retry failed receipt email</button>{message&&<p className="text-xs">{message}</p>}</div>;
 }
 function BankDetailsLink({ id }: { id: string }) {
 	return (
@@ -646,6 +651,7 @@ export function Workspace() {
 	const [marketing, setMarketing] = useState(false);
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+    const [cardBuyerName,setCardBuyerName]=useState("");
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [topupSuccess, setTopupSuccess] = useState("");
 	const [isAdmin, setIsAdmin] = useState(false);
@@ -745,7 +751,9 @@ export function Workspace() {
 			try {
 				const data = await request<{ user: Account | null }>("/api/auth");
 				if (cancelled || !data.user) return;
-				setAccount(data.user);
+	            const returnTo = new URLSearchParams(window.location.search).get('returnTo');
+            if (returnTo && /^\/api\/(payments\/invoice|bank-transfer\/documents)\?/.test(returnTo)) { window.location.assign(returnTo); return; }
+			setAccount(data.user);
 				if (typeof data.user.tokens === "number") setTokens(data.user.tokens);
 				await loadSpaces();
 			} catch {
@@ -980,7 +988,8 @@ export function Workspace() {
 			setError(amount.error);
 			return;
 		}
-		const eurAmount = amount.value;
+		if(cardBuyerName.trim().length<2){setError("Enter your name or company name for the invoice.");return;}
+        const eurAmount = amount.value;
 		setBusy(true);
 		setError("");
 		setOrderMsg("");
@@ -995,7 +1004,7 @@ export function Workspace() {
 					"/api/payments/checkout",
 					{
 						method: "POST",
-						body: JSON.stringify({ eurAmount, requestId: id }),
+						body: JSON.stringify({ eurAmount, requestId: id, buyerName:cardBuyerName.trim() }),
 					},
 				);
 			let result;
@@ -1779,7 +1788,8 @@ export function Workspace() {
 								min={CARD_MIN_EUR}
 								max={CARD_MAX_EUR}
 							/>
-							<button
+							<label className="block my-3 text-sm">Name or company for invoice<input required maxLength={200} value={cardBuyerName} onChange={e=>setCardBuyerName(e.target.value)} className="block w-full rounded border p-2 bg-transparent" /></label>
+<button
 								type="button"
 								disabled={busy || !onlineEnabled || !account || !paymentsLoaded}
 								title={
@@ -1890,7 +1900,8 @@ export function Workspace() {
 											Check payment status
 										</button>
 									)}
-									{o.status === "credited" && (
+									{o.status === "credited" && <RetryReceipt method="card" id={o.id}/>}
+                                    {o.status === "credited" && (
 										<a className="block mt-2 underline" href={`/api/payments/invoice?orderId=${o.id}`}>
 											Download invoice (PDF)
 										</a>

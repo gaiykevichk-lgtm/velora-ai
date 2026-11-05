@@ -135,13 +135,13 @@ test("run charge is taken from live lots and keeps the balance consistent", asyn
 			id: "a",
 			user_id: "u1",
 			remaining: 60,
-			expires_at: new Date("2026-11-01T00:00:00Z"),
+			expires_at: new Date("2099-11-01T00:00:00Z"),
 		},
 		{
 			id: "b",
 			user_id: "u1",
 			remaining: 200,
-			expires_at: new Date("2027-03-01T00:00:00Z"),
+			expires_at: new Date("2100-03-01T00:00:00Z"),
 		},
 	]);
 	const realNow = Date.now;
