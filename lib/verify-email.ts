@@ -80,6 +80,7 @@ async function smtpSend(opts: {
 	to: string;
 	subject: string;
 	text: string;
+	html?: string;
 }) {
 	const lines: string[] = [];
 	const send = (data: string) =>
@@ -161,13 +162,12 @@ async function smtpSend(opts: {
 		await ready([250, 251]);
 		await send("DATA\r\n");
 		await ready([354]);
-		const body =
-			`From: ${escapeHeader(opts.from)}\r\n` +
-			`To: ${escapeHeader(opts.to)}\r\n` +
-			`Subject: ${escapeHeader(opts.subject)}\r\n` +
-			`Content-Type: text/plain; charset=utf-8\r\n` +
-			`Content-Transfer-Encoding: 8bit\r\n\r\n` +
-			`${opts.text.replace(/\r?\n/g, "\r\n")}\r\n.\r\n`;
+		const boundary = `velora-${randomBytes(18).toString("hex")}`;
+		const encode = (s: string) => Buffer.from(s, "utf8").toString("base64").replace(/.{1,76}/g, "$&\r\n");
+		const content = opts.html
+			? `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n--${boundary}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${encode(opts.text)}--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${encode(opts.html)}--${boundary}--\r\n`
+			: `Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n${opts.text.replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..") }\r\n`;
+		const body = `From: ${escapeHeader(opts.from)}\r\nTo: ${escapeHeader(opts.to)}\r\nSubject: =?UTF-8?B?${b64(escapeHeader(opts.subject))}?=\r\n${content}.\r\n`;
 		await send(body);
 		await ready([250]);
 		try {
@@ -191,6 +191,7 @@ async function resendSend(opts: {
 	to: string;
 	subject: string;
 	text: string;
+	html?: string;
 }) {
 	const res = await fetch("https://api.resend.com/emails", {
 		method: "POST",
@@ -203,6 +204,7 @@ async function resendSend(opts: {
 			to: [opts.to],
 			subject: opts.subject,
 			text: opts.text,
+			...(opts.html ? { html: opts.html } : {}),
 		}),
 		signal: AbortSignal.timeout(20_000),
 	});
@@ -214,11 +216,11 @@ async function resendSend(opts: {
 	return body?.id ?? "";
 }
 
-async function deliverMail(to: string, subject: string, text: string) {
+async function deliverMail(to: string, subject: string, text: string, html?: string) {
 	const from = mailFrom();
 	if (!from) throw new Error("Mail sender is not configured.");
 	const apiKey = process.env.RESEND_API_KEY?.trim();
-	if (apiKey) return resendSend({ apiKey, from, to, subject, text });
+	if (apiKey) return resendSend({ apiKey, from, to, subject, text, html });
 	const cfg = verificationConfig();
 	if (!cfg)
 		throw new Error("Mail transport is not configured (set RESEND_API_KEY).");
@@ -231,6 +233,7 @@ async function deliverMail(to: string, subject: string, text: string) {
 		to,
 		subject,
 		text,
+		html,
 	});
 	return `smtp-${Date.now()}`;
 }
@@ -243,6 +246,12 @@ export async function sendPlainMail(to: string, subject: string, text: string) {
 	} catch (e) {
 		throw new Error(`Mail transport failed: ${(e as Error).message}`);
 	}
+}
+
+export async function sendHtmlMail(to: string, subject: string, text: string, html: string) {
+	if (!mailConfigured()) return { sent: false as const, messageId: "" };
+	const messageId = await deliverMail(to, subject, text, html);
+	return { sent: true as const, messageId: messageId || `mail-${Date.now()}` };
 }
 
 export async function sendVerificationEmail(to: string, token: string) {

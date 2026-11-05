@@ -88,3 +88,10 @@ test("without a key and sender the transport reports itself unconfigured", () =>
 	const mod = loadModule({});
 	assert.equal(mod.mailConfigured(), false);
 });
+
+test("HTML receipt includes both HTML and plain alternatives in the API request", async () => {
+ const mod = loadModule({ RESEND_API_KEY: "re_test_key", SMTP_FROM: "Velora <no-reply@example.com>", APP_BASE_URL: "https://example.com" });
+ const old = globalThis.fetch; let payload;
+ globalThis.fetch = async (_url, init) => { payload = JSON.parse(init.body); return new Response('{"id":"test"}', {status:200}); };
+ try { await mod.sendHtmlMail('buyer@example.com', 'Receipt', 'Plain copy', '<p>HTML copy</p>'); assert.equal(payload.text, 'Plain copy'); assert.equal(payload.html, '<p>HTML copy</p>'); } finally { globalThis.fetch = old; }
+});
