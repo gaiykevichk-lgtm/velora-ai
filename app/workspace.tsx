@@ -899,7 +899,24 @@ export function Workspace() {
 					eurAmount: amount.value,
 					requestId,
 					acceptedTerms: bankAccepted,
-					buyer: { kind: bankKind, email: account.email, ...bankBuyer },
+					// Send only the fields of the chosen buyer kind: empty strings
+					// for the other kind fail the server schema (min length) with 400.
+					buyer: {
+						kind: bankKind,
+						email: account.email,
+						country: bankBuyer.country,
+						address: bankBuyer.address,
+						...(bankKind === "person"
+							? { fullName: bankBuyer.fullName }
+							: {
+									legalName: bankBuyer.legalName,
+									regNumber: bankBuyer.regNumber,
+									repName: bankBuyer.repName,
+									...(bankBuyer.vat.trim()
+										? { vat: bankBuyer.vat }
+										: {}),
+								}),
+					},
 				}),
 			});
 			setBankOrder(res.order);
@@ -2029,6 +2046,16 @@ export function Workspace() {
 									</Link>
 								</span>
 							</label>
+							{orderMsg && (
+								<p className="mt-3 rounded-lg border border-[#1f8a3b] bg-[#0f2e1a] p-3 text-xs text-[#7dffa8]">
+									{orderMsg}
+								</p>
+							)}
+							{error && (
+								<p className="mt-3 rounded-lg border border-[#e93e3a] bg-[#2b0f0b] p-3 text-xs text-[#ff9988]">
+									{error}
+								</p>
+							)}
 							{!bankConfigured && (
 								<p className="mt-3 rounded-lg border border-[#3a2a1a] bg-[#1f140b] p-3 text-xs text-[#ffe4a6]">
 									Bank transfer orders are not open yet. No payment has been
