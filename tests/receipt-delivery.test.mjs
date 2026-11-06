@@ -11,7 +11,8 @@ function setup({ status = "credited", fail = false, paidCents = 2000 } = {}) {
 		payload;
 	const pool = {
 		async query(sql, args) {
-            if(sql.startsWith('SELECT COALESCE(SUM(amount_cents)')) return {rows:[{paid:paidCents}]};
+			if (sql.startsWith("SELECT COALESCE(SUM(amount_cents)"))
+				return { rows: [{ paid: paidCents }] };
 			if (
 				sql.startsWith("UPDATE purchase_receipt_outbox SET state='sending'")
 			) {
@@ -19,8 +20,9 @@ function setup({ status = "credited", fail = false, paidCents = 2000 } = {}) {
 				state = "sending";
 				return { rowCount: 1 };
 			}
-			if(sql.includes("SET payload=")) return {rows:[{payload:JSON.parse(args[2])}]};
-            if (sql.startsWith("SELECT id,email") || sql.startsWith("SELECT o.id"))
+			if (sql.includes("SET payload="))
+				return { rows: [{ payload: JSON.parse(args[2]) }] };
+			if (sql.startsWith("SELECT id,email") || sql.startsWith("SELECT o.id"))
 				return {
 					rows: [
 						{
@@ -30,7 +32,10 @@ function setup({ status = "credited", fail = false, paidCents = 2000 } = {}) {
 							tokens: 2000,
 							status,
 							credit_date: "2026-11-05T10:00:00Z",
-                            paid_at:"2026-11-05T10:00:00Z",invoice_number:"TU-2026-000001",invoice_id:"bank-invoice-id",buyer:{fullName:"Test Buyer"},
+							paid_at: "2026-11-05T10:00:00Z",
+							invoice_number: "TU-2026-000001",
+							invoice_id: "bank-invoice-id",
+							buyer: { fullName: "Test Buyer" },
 						},
 					],
 				};
@@ -63,21 +68,26 @@ function setup({ status = "credited", fail = false, paidCents = 2000 } = {}) {
 		Date,
 		console,
 		require: (path) =>
-			path === "./invoice-order" ? {cardInvoice: async()=> (await pool.query("SELECT id,email")).rows[0]} : path === "./db"
-				? { dbAsync: async () => pool }
-				: path === "./purchase-receipt.mjs"
-					? { purchaseReceipt }
-					: path === "./verify-email"
-						? {
-								sendHtmlMail: async (...args) => {
-									sends++;
-									key = args[4];
-									payload = args;
-									if (fail) throw Error("timeout");
-									return { sent: true, messageId: "message" };
-								},
-							}
-						: null,
+			path === "./invoice-order"
+				? {
+						cardInvoice: async () =>
+							(await pool.query("SELECT id,email")).rows[0],
+					}
+				: path === "./db"
+					? { dbAsync: async () => pool }
+					: path === "./purchase-receipt.mjs"
+						? { purchaseReceipt }
+						: path === "./verify-email"
+							? {
+									sendHtmlMail: async (...args) => {
+										sends++;
+										key = args[4];
+										payload = args;
+										if (fail) throw Error("timeout");
+										return { sent: true, messageId: "message" };
+									},
+								}
+							: null,
 	};
 	vm.runInNewContext(js, sandbox);
 	return {
@@ -115,9 +125,19 @@ test("uncredited order and ambiguous delivery do not automatically retry", async
 	}
 });
 
-test('bank receipt uses its own invoice, name, amount and tokens and sends once',async()=>{const s=setup();await s.deliver('bank','01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa');await s.deliver('bank','01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa');assert.equal(s.sends,1);assert.match(s.payload[2],/Test Buyer/);assert.match(s.payload[2],/Bank transfer/);assert.match(s.payload[2],/doc=bank-invoice-id/);assert.match(s.payload[2],/€20.00/);});
+test("bank receipt uses its own invoice, name, amount and tokens and sends once", async () => {
+	const s = setup();
+	await s.deliver("bank", "01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+	await s.deliver("bank", "01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+	assert.equal(s.sends, 1);
+	assert.match(s.payload[2], /Test Buyer/);
+	assert.match(s.payload[2], /Bank transfer/);
+	assert.match(s.payload[2], /doc=bank-invoice-id/);
+	assert.match(s.payload[2], /€20.00/);
+});
 
-test('bank receipt shows actual paid EUR matching invoice total on overpayment', async()=>{
- const s=setup({paidCents:2200});await s.deliver('bank','01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
- assert.match(s.payload[2],/Amount paid: €22.00/);
+test("bank receipt shows actual paid EUR matching invoice total on overpayment", async () => {
+	const s = setup({ paidCents: 2200 });
+	await s.deliver("bank", "01234567-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+	assert.match(s.payload[2], /Amount paid: €22.00/);
 });
