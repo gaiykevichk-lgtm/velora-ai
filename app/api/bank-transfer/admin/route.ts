@@ -325,11 +325,67 @@ export async function POST(req: NextRequest) {
 					[parsed.data.orderId],
 				);
 				const paidCents = Number(paid.rows[0].paid);
-				if (paid.rows[0].nonEur || paidCents < Number(order.eur_amount) * 100)
+				if (paid.rows[0].nonEur || paidCents <= 0)
 					throw Object.assign(
-						new Error("Full EUR receipt is required before crediting."),
+						new Error("A recorded EUR receipt is required before crediting."),
 						{ status: 409 },
 					);
+				// Credit by the actually received amount: a partial or overpaid
+				// transfer adjusts the purchase instead of waiting for the rest.
+				// Rate: 100 tokens per EUR (1 token per cent).
+				const tokens = Math.floor(paidCents / 100) * 100;
+				if (tokens < 100)
+					throw Object.assign(
+						new Error("The received amount is below the minimum credit."),
+						{ status: 409 },
+					);
+				// A payer who differs from the buyer stays on manual review:
+				// the purchase data is never rewritten with the sender's name.
+				const payer = await client.query(
+					"SELECT sender_name FROM bank_payments WHERE order_id=$1 ORDER BY created_at DESC LIMIT 1",
+					[parsed.data.orderId],
+				);
+				const norm = (v: string) =>
+					v
+						.toLowerCase()
+						.normalize("NFD")
+						.replace(/[̀-ͯ]/g, "")
+						.replace(/[^a-z0-9]+/g, " ")
+						.trim();
+				const buyerName =
+					order.buyer?.fullName || order.buyer?.legalName || "";
+				const payerName = payer.rows[0]?.sender_name || "";
+				const nPayer = norm(payerName);
+				const nBuyer = norm(buyerName);
+				const payerMatches =
+					nPayer === nBuyer ||
+					(nPayer.length > 3 &&
+						nBuyer.length > 3 &&
+						(nPayer.includes(nBuyer) || nBuyer.includes(nPayer)));
+				if (!payerMatches) {
+					await client.query(
+						"UPDATE bank_orders SET status='review',updated_at=now() WHERE id=$1",
+						[parsed.data.orderId],
+					);
+					await audit(
+						client,
+						parsed.data.orderId,
+						admin.email,
+						"order.review",
+						{
+							reason: "Payer name differs from the buyer",
+							payer: payerName,
+							buyer: buyerName,
+							note: parsed.data.note,
+						},
+					);
+					await client.query("COMMIT");
+					return NextResponse.json({
+						review: true,
+						message:
+							"Payer name differs from the buyer. The order is left on manual review; buyer data was not changed.",
+					});
+				}
 				const account = await client.query("SELECT id FROM users WHERE id=$1", [
 					order.user_id,
 				]);
@@ -337,7 +393,7 @@ export async function POST(req: NextRequest) {
 				await grantTokens(
 					client,
 					order.user_id,
-					Number(order.tokens),
+					tokens,
 					`Bank transfer ${order.public_number}`,
 				);
 				await client.query(
@@ -345,13 +401,13 @@ export async function POST(req: NextRequest) {
 					[
 						randomUUID(),
 						order.user_id,
-						Number(order.tokens),
+						tokens,
 						`Bank transfer ${order.public_number}`,
 					],
 				);
 				await client.query(
-					"UPDATE bank_orders SET status='credited',updated_at=now() WHERE id=$1",
-					[parsed.data.orderId],
+					"UPDATE bank_orders SET status='credited',credited_tokens=$2,updated_at=now() WHERE id=$1",
+					[parsed.data.orderId, tokens],
 				);
 				await client.query(
 					"INSERT INTO purchase_receipt_outbox (method,order_id) VALUES ('bank',$1) ON CONFLICT (method,order_id) DO NOTHING",
@@ -373,7 +429,13 @@ export async function POST(req: NextRequest) {
 					parsed.data.orderId,
 					admin.email,
 					"order.credited",
-					{ tokens: Number(order.tokens), note: parsed.data.note },
+					{
+						tokens,
+						receivedEur: Math.floor(paidCents / 100),
+						orderedEur: Number(order.eur_amount),
+						adjusted: paidCents !== Number(order.eur_amount) * 100,
+						note: parsed.data.note,
+					},
 				);
 				await client.query("COMMIT");
 				try {

@@ -111,7 +111,7 @@ test("routes enforce buyer auth, verified email, admin-only decisions and eviden
 	assert.match(admin, /adminUser/);
 	assert.match(admin, /FOR UPDATE/);
 	assert.match(admin, /Order is already credited/);
-	assert.match(admin, /Full EUR receipt is required/);
+	assert.match(admin, /A recorded EUR receipt is required/);
 	assert.match(admin, /token_transactions/);
 	assert.match(admin, /payment\.recorded/);
 	assert.match(admin, /order\.credited/);
@@ -156,8 +156,16 @@ test("routes enforce buyer auth, verified email, admin-only decisions and eviden
 		readFileSync("app/public-controls.tsx", "utf8"),
 		/min=\{2\}[\s\S]*max=\{2500\}/,
 	);
-	assert.match(ui, /Confirm receipt — credit once/);
-	assert.match(ui, /Download dossier \(ZIP\)/);
+	// Admin actions live on the standalone /admin page, not in the purchase modal.
+	const adminUi = readFileSync("app/admin/admin-app.tsx", "utf8");
+	assert.match(adminUi, /Confirm Bank Transfer/);
+	assert.match(adminUi, /Record Refund/);
+	assert.match(adminUi, /Download dossier \(ZIP\)/);
+	assert.match(adminUi, /Resend Email/);
+	assert.doesNotMatch(ui, /Confirm receipt — credit once/);
+	assert.match(readFileSync("app/admin/page.tsx", "utf8"), /adminUser/);
+	const adminApi = readFileSync("app/api/admin/orders/route.ts", "utf8");
+	assert.match(adminApi, /adminUser/);
 });
 
 test("lawful text describes tokens as usage units, keeps tax fields blank", () => {

@@ -22,7 +22,7 @@ export async function deliverPurchaseReceipt(method: Method, orderId: string) {
 						[orderId],
 					)
 				: await pool.query(
-						"SELECT o.id,o.email,o.eur_amount,o.tokens,o.status,o.confirmed_at AS credit_date,d.id AS invoice_id,d.doc_number AS invoice_number,o.buyer FROM bank_orders o JOIN bank_order_documents d ON d.order_id=o.id AND d.kind='invoice' WHERE o.id=$1 ORDER BY d.created_at LIMIT 1",
+						"SELECT o.id,o.email,o.eur_amount,COALESCE(o.credited_tokens,o.tokens) AS tokens,o.status,o.confirmed_at AS credit_date,d.id AS invoice_id,d.doc_number AS invoice_number,o.buyer FROM bank_orders o JOIN bank_order_documents d ON d.order_id=o.id AND d.kind='invoice' WHERE o.id=$1 ORDER BY d.created_at LIMIT 1",
 						[orderId],
 					);
 		const order =
@@ -69,6 +69,7 @@ export async function deliverPurchaseReceipt(method: Method, orderId: string) {
 			tokens: Number(order.tokens),
 			amount:
 				method === "bank" ? Number(paid.paid) / 100 : Number(order.eur_amount),
+			orderedEur: method === "bank" ? Number(order.eur_amount) : undefined,
 		});
 		const stored = await pool.query(
 			"UPDATE purchase_receipt_outbox SET payload=COALESCE(payload,$3::jsonb),first_attempt_at=COALESCE(first_attempt_at,now()) WHERE method=$1 AND order_id=$2 RETURNING payload",

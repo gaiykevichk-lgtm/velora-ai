@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Velora AI — Admin · Order VEL-2026-000004</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0803;
+  --panel:#160d06;
+  --panel2:#1d1208;
+  --line:#3a2a1a;
+  --line2:#2a1c10;
+  --text:#f7efe0;
+  --body:#d9cfba;
+  --muted:#9a8c74;
+  --accent:#f54900;
+  --accent2:#f3913e;
+  --gold:#ffe4a6;
+  --green:#3ee06a;
+  --greenbg:#0f2e1a;
+  --red:#ff6b7d;
+  --redbg:#331118;
+  --amber:#f5a623;
+  --amberbg:#33220f;
+  --sans:'Hanken Grotesk',sans-serif;
+  --display:'Bricolage Grotesque',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  background:var(--bg);color:var(--body);
+  font-family:var(--sans);font-size:13px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}
+.app{display:flex;min-height:100vh;}
+
+/* ---------- Sidebar ---------- */
+.sidebar{
+  width:232px;flex-shrink:0;background:var(--panel);
+  border-right:1px solid var(--line2);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:20px 18px 16px;border-bottom:1px solid var(--line2);}
+.brand svg{color:var(--accent);}
+.brand-name{font-family:var(--display);font-weight:700;font-size:15px;color:var(--text);letter-spacing:0.06em;}
+.brand-sub{font-size:10px;color:var(--muted);letter-spacing:0.14em;text-transform:uppercase;}
+.menu{padding:14px 10px;display:flex;flex-direction:column;gap:2px;flex:1;}
+.menu-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);padding:10px 10px 6px;}
+.menu-item{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;
+  color:var(--body);text-decoration:none;font-weight:500;border:1px solid transparent;
+}
+.menu-item svg{color:var(--muted);flex-shrink:0;}
+.menu-item:hover{background:var(--panel2);color:var(--text);}
+.menu-item.active{background:var(--panel2);border-color:var(--line);color:var(--gold);}
+.menu-item.active svg{color:var(--accent2);}
+.menu-tag{
+  margin-left:auto;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--accent2);border:1px solid var(--line);border-radius:99px;padding:2px 7px;
+}
+.user{border-top:1px solid var(--line2);padding:14px 18px;display:flex;align-items:center;gap:10px;}
+.avatar{
+  width:32px;height:32px;border-radius:50%;background:var(--amberbg);color:var(--amber);
+  display:grid;place-items:center;font-weight:700;font-size:12px;border:1px solid var(--line);flex-shrink:0;
+}
+.user-email{font-size:11px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.user-role{font-size:10px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;}
+
+/* ---------- Main ---------- */
+.main{flex:1;min-width:0;padding:24px 32px 48px;max-width:1120px;}
+.back{
+  display:inline-flex;align-items:center;gap:6px;
+  color:var(--muted);text-decoration:none;font-size:12.5px;font-weight:600;margin-bottom:14px;
+}
+.back:hover{color:var(--gold);}
+.order-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+.order-title{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+h1{font-family:var(--display);font-size:24px;font-weight:700;color:var(--text);}
+.pill{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:700;border-radius:99px;padding:4px 11px;
+}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+.st-review{color:var(--amber);background:var(--amberbg);}
+.actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{
+  font-family:var(--sans);font-size:12.5px;font-weight:700;
+  border-radius:8px;padding:9px 16px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel2);color:var(--body);
+  display:inline-flex;align-items:center;gap:7px;
+}
+.btn:hover{color:var(--text);border-color:var(--muted);}
+.btn svg{color:var(--muted);}
+.btn-primary{
+  background:var(--accent);border-color:var(--accent);color:#fff;
+}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2);color:#fff;}
+.btn-primary svg{color:#fff;}
+
+/* ---------- Summary strip ---------- */
+.summary{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px;
+}
+.sum-card{
+  background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:16px 18px;
+}
+.sum-label{font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.sum-value{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--text);}
+.sum-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.sum-value.gold{color:var(--gold);}
+
+/* ---------- Banner ---------- */
+.banner{
+  display:flex;gap:10px;align-items:flex-start;
+  background:var(--amberbg);border:1px solid #6b4a12;border-radius:10px;
+  padding:12px 14px;margin-bottom:18px;font-size:12.5px;color:var(--gold);
+}
+.banner svg{color:var(--amber);flex-shrink:0;margin-top:1px;}
+.banner b{color:var(--text);}
+
+/* ---------- Tabs ---------- */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line2);margin-bottom:20px;flex-wrap:wrap;}
+.tab{
+  background:none;border:none;cursor:pointer;
+  font-family:var(--sans);font-size:13px;font-weight:600;color:var(--muted);
+  padding:10px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  display:inline-flex;align-items:center;gap:7px;
+}
+.tab:hover{color:var(--text);}
+.tab.on{color:var(--gold);border-bottom-color:var(--accent);}
+.tab-n{font-family:var(--mono);font-size:10px;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:1px 7px;color:var(--muted);}
+.tab.on .tab-n{color:var(--accent2);border-color:var(--line);}
+.panel{display:none;}
+.panel.on{display:block;}
+
+/* ---------- Sections ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media (max-width:900px){.grid2{grid-template-columns:1fr;}}
+.card{
+  background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:18px 20px;
+}
+.card-title{
+  font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);
+  margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line2);
+}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:7px 14px;font-size:12.5px;}
+.kv dt{color:var(--muted);}
+.kv dd{color:var(--text);font-weight:500;min-width:0;overflow-wrap:break-word;}
+.kv dd.mono{font-family:var(--mono);font-size:12px;}
+
+/* Documents / Emails / History */
+.doc-row{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 0;border-bottom:1px solid var(--line2);
+}
+.doc-row:last-child{border-bottom:none;}
+.doc-icon{
+  width:32px;height:32px;border-radius:8px;flex-shrink:0;
+  background:var(--panel2);border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--accent2);
+}
+.doc-name{font-size:12.5px;font-weight:600;color:var(--text);}
+.doc-meta{font-size:11px;color:var(--muted);font-family:var(--mono);}
+.doc-dl{
+  margin-left:auto;color:var(--accent2);font-weight:600;font-size:12px;
+  text-decoration:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+}
+.doc-dl:hover{color:var(--gold);}
+
+.email-head{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:12px 0;border-bottom:1px solid var(--line2);
+}
+.email-subject{font-weight:600;color:var(--text);font-size:12.5px;}
+.email-meta{color:var(--muted);font-size:11.5px;}
+.st-sent{color:var(--green);background:var(--greenbg);}
+.btn-sm{padding:5px 11px;font-size:11.5px;border-radius:7px;}
+.email-body{
+  background:var(--panel2);border:1px solid var(--line2);border-radius:10px;
+  padding:16px 18px;margin-top:12px;font-size:12.5px;color:var(--body);
+}
+.email-body .eb-subject{font-weight:700;color:var(--text);margin-bottom:8px;font-size:13px;}
+.email-cta{
+  display:inline-block;margin-top:12px;
+  background:var(--accent);color:#fff;font-weight:700;font-size:12px;
+  border-radius:8px;padding:8px 16px;text-decoration:none;
+}
+
+.timeline{list-style:none;}
+.tl-item{display:flex;gap:12px;padding:9px 0;}
+.tl-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:6px;
+  background:var(--accent2);
+}
+.tl-item.tl-green .tl-dot{background:var(--green);}
+.tl-item.tl-muted .tl-dot{background:var(--muted);}
+.tl-text{font-size:12.5px;color:var(--text);font-weight:500;}
+.tl-sub{font-size:11px;color:var(--muted);font-family:var(--mono);}
+
+@media (max-width:860px){
+  .sidebar{display:none;}
+  .main{padding:20px 16px 40px;}
+  .summary{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+      <div>
+        <div class="brand-name">VELORA AI</div>
+        <div class="brand-sub">Studio</div>
+      </div>
+    </div>
+    <nav class="menu">
+      <div class="menu-label">Workspace</div>
+      <a class="menu-item" href="#">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        Studio
+      </a>
+      <a class="menu-item" href="#">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        Payments
+      </a>
+      <div class="menu-label">Management</div>
+      <a class="menu-item active" href="#">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Admin
+        <span class="menu-tag">Admin only</span>
+      </a>
+    </nav>
+    <div class="user">
+      <div class="avatar">A</div>
+      <div style="min-width:0;">
+        <div class="user-email">admin-db2fb5eb@omnix-21.com</div>
+        <div class="user-role">Administrator</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <a class="back" href="#">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Orders
+    </a>
+
+    <div class="order-head">
+      <div class="order-title">
+        <h1>Order VEL-2026-000004</h1>
+        <span class="pill st-review">Under Review</span>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Resend Email
+        </button>
+        <button class="btn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 0 0 14.85 3.36L23 20M1 20l4.64-4.36A9 9 0 0 1 20.49 9"/></svg>
+          Record Refund
+        </button>
+        <button class="btn btn-primary" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Confirm Bank Transfer
+        </button>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary">
+      <div class="sum-card">
+        <div class="sum-label">Ordered</div>
+        <div class="sum-value">€2.00</div>
+        <div class="sum-sub">200 tokens</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Received</div>
+        <div class="sum-value gold">—</div>
+        <div class="sum-sub">Awaiting bank receipt</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Tokens Credited</div>
+        <div class="sum-value">—</div>
+        <div class="sum-sub">Credited after confirmation</div>
+      </div>
+    </div>
+
+    <!-- Banner -->
+    <div class="banner">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>The customer pressed <b>I've paid</b> on 06 Nov 2026, 23:58. The transfer is not yet verified — <b>confirm only after the money arrives</b> on the Omnix21 account.</span>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" id="tabs">
+      <button class="tab on" data-panel="p-overview" type="button">Overview</button>
+      <button class="tab" data-panel="p-docs" type="button">Documents <span class="tab-n">2</span></button>
+      <button class="tab" data-panel="p-emails" type="button">Emails <span class="tab-n">1</span></button>
+      <button class="tab" data-panel="p-history" type="button">History <span class="tab-n">3</span></button>
+    </div>
+
+    <!-- Overview -->
+    <section class="panel on" id="p-overview">
+      <div class="grid2">
+        <div class="card">
+          <div class="card-title">Buyer</div>
+          <dl class="kv">
+            <dt>Type</dt><dd>Individual</dd>
+            <dt>Name</dt><dd>León Gaži</dd>
+            <dt>Email</dt><dd>sipingjah1845@outlook.com</dd>
+            <dt>Country</dt><dd>Slovakia</dd>
+            <dt>Address</dt><dd>Bočná ulica 62/4</dd>
+            <dt>Terms</dt><dd>Version 2026-10-29-v1, accepted 06 Nov 2026</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <div class="card-title">Purchase</div>
+          <dl class="kv">
+            <dt>Item</dt><dd>Prepaid Velora AI tokens</dd>
+            <dt>Ordered amount</dt><dd class="mono">€2.00</dd>
+            <dt>Ordered tokens</dt><dd class="mono">200</dd>
+            <dt>Rate</dt><dd class="mono">€1 = 100 tokens</dd>
+            <dt>Method</dt><dd>Bank Transfer</dd>
+            <dt>Payment reference</dt><dd class="mono">Invoice INV-2026-000004</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <div class="card-title">Bank Transfer Details</div>
+          <dl class="kv">
+            <dt>Recipient</dt><dd>Omnix21</dd>
+            <dt>IBAN</dt><dd class="mono">FR76 3000 4028 3700 0101 7363 876</dd>
+            <dt>BIC</dt><dd class="mono">BNPAFRPPXXX</dd>
+            <dt>Bank</dt><dd>BNP Paribas</dd>
+            <dt>Reference</dt><dd class="mono">INV-2026-000004</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <div class="card-title">Receipt</div>
+          <dl class="kv">
+            <dt>Status</dt><dd>Not received yet</dd>
+            <dt>Received amount</dt><dd class="mono">—</dd>
+            <dt>Payer name</dt><dd>—</dd>
+            <dt>Bank reference</dt><dd>—</dd>
+            <dt>Credited tokens</dt><dd class="mono">—</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- Documents -->
+    <section class="panel" id="p-docs">
+      <div class="card">
+        <div class="card-title">Order Documents</div>
+        <div class="doc-row">
+          <div class="doc-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div>
+            <div class="doc-name">Order Confirmation</div>
+            <div class="doc-meta">OC-2026-000004 · 06 Nov 2026</div>
+          </div>
+          <a class="doc-dl" href="#">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download PDF
+          </a>
+        </div>
+        <div class="doc-row">
+          <div class="doc-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <div>
+            <div class="doc-name">Invoice</div>
+            <div class="doc-meta">INV-2026-000004 · 06 Nov 2026</div>
+          </div>
+          <a class="doc-dl" href="#">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download PDF
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Emails -->
+    <section class="panel" id="p-emails">
+      <div class="card">
+        <div class="card-title">Emails to Customer</div>
+        <div class="email-head">
+          <span class="pill st-sent">Sent</span>
+          <span class="email-subject">Bank transfer details — Order VEL-2026-000004</span>
+          <span class="email-meta">to sipingjah1845@outlook.com · 06 Nov 2026, 21:54</span>
+          <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-sm" type="button">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Resend
+            </button>
+          </span>
+        </div>
+        <div class="email-body">
+          <div class="eb-subject">Your bank transfer details — Velora AI</div>
+          <p>Hi León,</p>
+          <p style="margin-top:6px;">Your order <b>VEL-2026-000004</b> is accepted. Please transfer <b>€2.00</b> with the reference <b>INV-2026-000004</b> to complete it. Tokens are credited within 2 business days of receipt.</p>
+          <p style="margin-top:6px;color:var(--muted);">Recipient: Omnix21 · IBAN FR76 3000 4028 3700 0101 7363 876 · BIC BNPAFRPPXXX</p>
+          <a class="email-cta" href="#">View &amp; download invoice</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- History -->
+    <section class="panel" id="p-history">
+      <div class="card">
+        <div class="card-title">History</div>
+        <ul class="timeline">
+          <li class="tl-item">
+            <span class="tl-dot"></span>
+            <div>
+              <div class="tl-text">Payment reported by customer</div>
+              <div class="tl-sub">06 Nov 2026, 23:58 · customer</div>
+            </div>
+          </li>
+          <li class="tl-item tl-green">
+            <span class="tl-dot"></span>
+            <div>
+              <div class="tl-text">Email sent — bank transfer details</div>
+              <div class="tl-sub">06 Nov 2026, 21:54 · system · message logged</div>
+            </div>
+          </li>
+          <li class="tl-item tl-muted">
+            <span class="tl-dot"></span>
+            <div>
+              <div class="tl-text">Order created</div>
+              <div class="tl-sub">06 Nov 2026, 21:53 · system · 200 tokens ordered for €2.00</div>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var tabs=document.getElementById('tabs');
+  tabs.addEventListener('click',function(e){
+    var t=e.target.closest('.tab');
+    if(!t) return;
+    tabs.querySelectorAll('.tab').forEach(function(x){x.classList.remove('on');});
+    t.classList.add('on');
+    document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('on');});
+    document.getElementById(t.getAttribute('data-panel')).classList.add('on');
+  });
+})();
+</script>
+</body>
+</html>

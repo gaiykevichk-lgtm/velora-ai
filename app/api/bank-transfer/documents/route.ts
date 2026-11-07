@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 		if (kind === "document" && doc) {
 			const row = (
 				await pool.query(
-					"SELECT d.kind,d.doc_number,d.payload,o.id AS order_id,o.user_id,o.email,o.status,o.public_number,o.eur_amount,o.tokens,o.buyer,o.seller,o.confirmed_at,o.terms_version FROM bank_order_documents d JOIN bank_orders o ON o.id=d.order_id WHERE d.id=$1",
+					"SELECT d.kind,d.doc_number,d.payload,o.id AS order_id,o.user_id,o.email,o.status,o.public_number,o.eur_amount,o.tokens,o.credited_tokens,o.buyer,o.seller,o.confirmed_at,o.terms_version FROM bank_order_documents d JOIN bank_orders o ON o.id=d.order_id WHERE d.id=$1",
 					[doc],
 				)
 			).rows[0];
@@ -51,7 +51,9 @@ export async function GET(req: NextRequest) {
 						).rows
 					: [];
 			const { paid, paidCents, refs } = bankInvoicePayment(row, payments);
-			const pdf = row.kind === "invoice" ? await invoicePdf({number:row.doc_number,date:new Date(row.confirmed_at).toISOString().slice(0,10),email:row.email,buyerName,method:"Bank transfer",reference:refs.join(", "),amount:Number(row.eur_amount),tokens:Number(row.tokens),paid,totalPaid:paidCents/100,status:row.status === "credited" ? "Review" : row.status}) : textPdf(`${row.kind} ${row.doc_number}`, [
+			const shownTokens = Number(row.credited_tokens ?? row.tokens);
+			const shownAmount = paid ? paidCents / 100 : Number(row.eur_amount);
+			const pdf = row.kind === "invoice" ? await invoicePdf({number:row.doc_number,date:new Date(row.confirmed_at).toISOString().slice(0,10),email:row.email,buyerName,method:"Bank transfer",reference:refs.join(", "),amount:shownAmount,tokens:shownTokens,paid,totalPaid:paidCents/100,status:row.status === "credited" ? "Review" : row.status}) : textPdf(`${row.kind} ${row.doc_number}`, [
 				`${String(row.kind).toUpperCase()} ${row.doc_number}`,
 				`Date: ${new Date(row.confirmed_at).toISOString().slice(0, 10)}   Order: ${row.public_number}`,
 				`Seller: ${sl.legalName}, ${sl.address}`,
@@ -59,7 +61,7 @@ export async function GET(req: NextRequest) {
 				`Buyer: ${buyerName}, ${b.country}`,
 				`Buyer email: ${row.email}`,
 				`Item: Prepaid Velora AI tokens (usage units for AI generation)`,
-				`Quantity: ${Number(row.tokens).toLocaleString("en-US")} tokens   Amount: ${Number(row.eur_amount).toFixed(2)} EUR`,
+				`Quantity: ${shownTokens.toLocaleString("en-US")} tokens   Amount: ${shownAmount.toFixed(2)} EUR`,
 				`Payment method: Bank transfer`,
 				...(paid
 					? [

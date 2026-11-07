@@ -11,6 +11,7 @@ import {
 	Image as ImageIcon,
 	Menu,
 	MessageCircle,
+	ShieldCheck,
 	Paperclip,
 	Plus,
 	X,
@@ -285,246 +286,6 @@ function BankDetailsLink({ id }: { id: string }) {
 		</div>
 	);
 }
-function BankAdminCard(props: {
-	order: any;
-	busyId: string;
-	pay: any;
-	setPay: (v: any) => void;
-	refund: any;
-	setRefund: (v: any) => void;
-	evidenceMsg: string;
-	setEvidenceMsg: (v: string) => void;
-	call: (action: string, body: any, orderId: string) => void;
-}) {
-	const {
-		order,
-		busyId,
-		pay,
-		setPay,
-		refund,
-		setRefund,
-		evidenceMsg,
-		setEvidenceMsg,
-		call,
-	} = props;
-	const o = order.order;
-	const paid =
-		(order.payments as any[]).reduce(
-			(n: number, r: any) => n + Number(r.amount_cents),
-			0,
-		) / 100;
-	const labels: Record<string, string> = {
-		awaiting_payment: "Awaiting payment",
-		confirmed: "Awaiting payment",
-		partial: "Partial payment — manual review",
-		review: "Payment under review",
-		reported: "Payment reported — verify receipt",
-		credited: "Paid — tokens credited",
-		cancelled: "Cancelled",
-		refunded: "Refund processed",
-	};
-	async function upload(ev: React.ChangeEvent<HTMLInputElement>) {
-		const f = ev.target.files?.[0];
-		if (!f) return;
-		const fd = new FormData();
-		fd.append("orderId", o.id);
-		fd.append("file", f);
-		setEvidenceMsg("Uploading...");
-		try {
-			const r = await fetch("/api/bank-transfer/evidence", {
-				method: "POST",
-				body: fd,
-			});
-			const j = await r.json();
-			if (!r.ok) throw new Error(j.error || "Upload failed");
-			setEvidenceMsg("Evidence attached.");
-		} catch (e) {
-			setEvidenceMsg((e as Error).message);
-		}
-		ev.target.value = "";
-	}
-	return (
-		<div className="mt-3 rounded-xl border border-[#e93e3a] p-3 text-xs text-[#d0c6b4]">
-			<div className="font-bold text-white">
-				Admin transfer card: {o.public_number} ·{" "}
-				{currency(Number(o.eur_amount))} · {labels[o.status] ?? o.status}
-			</div>
-			<div className="mt-1">
-				Paid {currency(paid)} of {currency(Number(o.eur_amount))}; remaining{" "}
-				{currency(Math.max(0, Number(o.eur_amount) - paid))} · Mail:{" "}
-				{order.mail ? `${order.mail.state}` : "no record"}
-			</div>
-			<div className="mt-2">
-				Reference {o.public_number}
-				<CopyText text={o.public_number} />
-			</div>
-			<div className="mt-2">
-				<button
-					type="button"
-					disabled={busyId === o.id + "payment"}
-					onClick={() =>
-						void call(
-							"payment",
-							{
-								orderId: o.id,
-								senderName: pay.senderName,
-								amount: Number(pay.amount),
-								currency: pay.currency,
-								receivedDate: pay.receivedDate,
-								bankRef: pay.bankRef || null,
-								paymentRef: pay.paymentRef,
-								matchBasis: pay.matchBasis,
-								idempotencyKey: crypto.randomUUID(),
-							},
-							o.id,
-						)
-					}
-					className="rounded-full border px-3 py-1.5 font-bold"
-				>
-					Record receipt
-				</button>{" "}
-				<button
-					type="button"
-					disabled={busyId === o.id + "credit"}
-					onClick={() =>
-						void call("credit", { orderId: o.id, note: "manual confirm" }, o.id)
-					}
-					className="rounded-full border border-[#1f8a3b] px-3 py-1.5 font-bold"
-				>
-					Confirm receipt — credit once
-				</button>
-			</div>
-			<div className="mt-3">
-				Evidence:{" "}
-				{(order.evidence as any[]).map((e: any) => (
-					<div key={e.id}>
-						{e.file_name} ·{" "}
-						<a
-							className="underline"
-							href={`/api/bank-transfer/documents?evidenceId=${e.id}`}
-						>
-							Download
-						</a>
-					</div>
-				))}
-				<label className="mt-1 block">
-					Attach PDF/CSV/PNG/JPEG up to 15MB{" "}
-					<input
-						type="file"
-						accept=".pdf,.csv,.png,.jpg,.jpeg"
-						onChange={(e) => void upload(e)}
-					/>
-				</label>
-				{evidenceMsg ? <div>{evidenceMsg}</div> : null}
-				<label className="mt-1 block">
-					Attach signed contract (PDF){" "}
-					<input
-						type="file"
-						accept=".pdf"
-						onChange={(e) => {
-							const f = e.target.files?.[0];
-							if (!f) return;
-							const r = new FileReader();
-							r.onload = () => {
-								const b64 = String(r.result).split(",")[1];
-								void call(
-									"contract",
-									{
-										orderId: o.id,
-										fileName: f.name,
-										mime: "application/pdf",
-										dataBase64: b64,
-									},
-									o.id,
-								);
-							};
-							r.readAsDataURL(f);
-						}}
-					/>
-				</label>
-			</div>
-			<div className="mt-3">
-				Documents:{" "}
-				{(order.docs as any[]).map((d: any) => (
-					<div key={d.id}>
-						{d.kind} {d.doc_number} v{d.version}{" "}
-						<a
-							className="underline"
-							href={`/api/bank-transfer/documents?kind=document&doc=${d.id}`}
-						>
-							PDF
-						</a>
-					</div>
-				))}
-				<a
-					className="mt-1 underline inline-block"
-					href={`/api/bank-transfer/admin?action=dossier&orderId=${o.id}`}
-				>
-					Download dossier (ZIP)
-				</a>
-			</div>
-			<div className="mt-3">
-				Refunds:{" "}
-				{(order.refunds as any[]).map((r: any) => (
-					<div key={r.id}>
-						{r.status} €{Number(r.amount_cents) / 100} {r.bank_ref} {r.reason}
-					</div>
-				))}
-				<div className="grid grid-cols-2 gap-2 mt-1">
-					<BankField
-						label="Refund EUR"
-						value={refund.amount}
-						set={(v) => setRefund({ ...refund, amount: v })}
-					/>
-					<BankField
-						label="Refund bank ref"
-						value={refund.bankRef}
-						set={(v) => setRefund({ ...refund, bankRef: v })}
-					/>
-				</div>
-				<BankField
-					label="Reason"
-					value={refund.reason}
-					set={(v) => setRefund({ ...refund, reason: v })}
-				/>
-				<BankField
-					label="Token correction"
-					value={refund.tokenCorrection}
-					set={(v) => setRefund({ ...refund, tokenCorrection: v })}
-				/>
-				<button
-					type="button"
-					disabled={busyId === o.id + "refund"}
-					className="mt-1 rounded-full border px-3 py-1.5"
-					onClick={() =>
-						void call(
-							"refund",
-							{
-								orderId: o.id,
-								amount: Number(refund.amount) || 0,
-								status: "executed",
-								reason: refund.reason,
-								bankRef: refund.bankRef,
-								tokenCorrection: Number(refund.tokenCorrection) || 0,
-							},
-							o.id,
-						)
-					}
-				>
-					Record executed refund
-				</button>
-			</div>
-			<div className="mt-3">
-				History:{" "}
-				{(order.history as any[]).map((h: any, i: number) => (
-					<div key={i}>
-						{String(h.created_at)} · {h.actor_email} · {h.action}
-					</div>
-				))}
-			</div>
-		</div>
-	);
-}
 type TokenOrder = {
 	id: string;
 	eur_amount: number;
@@ -664,7 +425,6 @@ export function Workspace() {
 		requestId: string;
 	} | null>(null);
 	const [orderMsg, setOrderMsg] = useState("");
-	const [adminBusyId, setAdminBusyId] = useState("");
 	const [bankText, setBankText] = useState("20");
 	const [cardText, setCardText] = useState("20");
 	const [bankKind, setBankKind] = useState<"person" | "company">("person");
@@ -690,24 +450,6 @@ export function Workspace() {
 	const [bankOrders, setBankOrders] = useState<any[]>([]);
 	const [bankProfile, setBankProfile] = useState<any | null>(null);
 	const [bankRequestId, setBankRequestId] = useState<string | null>(null);
-	const [bankAdmin, setBankAdmin] = useState<any | null>(null);
-	const [bankPay, setBankPay] = useState({
-		senderName: "",
-		amount: "",
-		currency: "EUR",
-		receivedDate: "",
-		bankRef: "",
-		paymentRef: "",
-		matchBasis: "",
-	});
-	const [bankRefund, setBankRefund] = useState({
-		amount: "",
-		status: "requested",
-		reason: "",
-		bankRef: "",
-		tokenCorrection: "0",
-	});
-	const [bankEvidenceMsg, setBankEvidenceMsg] = useState("");
 
 	// Drawers and dialogs must not scroll the background page.
 	useEffect(() => {
@@ -831,40 +573,6 @@ export function Workspace() {
 			setError((e as Error).message);
 		}
 	}, []);
-	const refreshBankAdmin = useCallback(async (id: string) => {
-		try {
-			const data = await request<{
-				order: any;
-				payments: any[];
-				evidence: any[];
-				mail: any;
-				docs: any[];
-				history: any[];
-				refunds: any[];
-			}>(`/api/bank-transfer/orders?id=${encodeURIComponent(id)}`);
-			setBankAdmin(data);
-		} catch (e) {
-			setError((e as Error).message);
-		}
-	}, []);
-	useEffect(() => {
-		if (topupOpen && account) {
-			void refreshBank();
-			void refreshTokens();
-		}
-	}, [topupOpen, account, refreshBank, refreshTokens]);
-	useEffect(() => {
-		if (bankProfile && !bankOrder)
-			setBankBuyer({
-				fullName: bankProfile.fullName ?? "",
-				legalName: bankProfile.legalName ?? "",
-				regNumber: bankProfile.regNumber ?? "",
-				repName: bankProfile.repName ?? "",
-				vat: bankProfile.vat ?? "",
-				country: bankProfile.country ?? "",
-				address: bankProfile.address ?? "",
-			});
-	}, [bankProfile, bankOrder]);
 	async function createBankOrder() {
 		if (!account) {
 			setAuthOpen(true);
@@ -947,24 +655,6 @@ export function Workspace() {
 			setBusy(false);
 		}
 	}
-	async function bankAdminCall(action: string, body: any, orderId: string) {
-		setAdminBusyId(orderId + action);
-		setError("");
-		try {
-			await request(`/api/bank-transfer/admin?action=${action}`, {
-				method: "POST",
-				body: JSON.stringify(body),
-			});
-			await refreshBankAdmin(orderId);
-			void refreshBank();
-			void refreshTokens();
-		} catch (e) {
-			setError((e as Error).message);
-		} finally {
-			setAdminBusyId("");
-		}
-	}
-
 	const refreshPayments = useCallback(
 		async (orderId?: string) => {
 			try {
@@ -994,6 +684,8 @@ export function Workspace() {
 		if (topupOpen && account)
 			void refreshPayments(searchParams.get("paymentOrder") || undefined);
 	}, [topupOpen, account, refreshPayments, searchParams]);
+
+
 
 	async function checkout() {
 		if (!account) {
@@ -1377,6 +1069,19 @@ export function Workspace() {
 						</p>
 					)}
 				</div>
+
+				{isAdmin && (
+					<>
+						<div className="side-label">MANAGEMENT</div>
+						<nav className="side-nav" aria-label="Management">
+							<Link href="/admin" className="nav-item">
+								<ShieldCheck size={18} strokeWidth={1.8} />
+								<span className="flex-1 text-left">Admin</span>
+							</Link>
+						</nav>
+						<div className="side-rule" />
+					</>
+				)}
 
 				<div className="side-bottom">
 					{account ? (
@@ -2127,42 +1832,11 @@ export function Workspace() {
 												{openBankOrder === o.id ? "Hide details" : "Payment details"}
 											</button>
 											{openBankOrder === o.id ? <BankDetailsLink id={o.id} /> : null}
-											{isAdmin ? (
-												<button
-													type="button"
-													className="ml-2 underline"
-													onClick={() => void refreshBankAdmin(o.id)}
-												>
-													Open in admin
-												</button>
-											) : null}
 										</li>
 									))}
 								</ul>
 							)}
 						</div>
-						{isAdmin && bankAdmin ? (
-							<div className="mt-6 rounded-xl border border-[#3a2a1a] bg-[#120a05] p-4">
-								<div className="text-xs text-[#8a7e6f] font-bold uppercase">
-									Administrator view
-								</div>
-								<p className="mt-2 text-[11px] text-[#8a7e6f]">
-									Only emails listed in ADMIN_EMAILS can confirm transfers,
-									refund and credit tokens.
-								</p>
-								<BankAdminCard
-									order={bankAdmin}
-									busyId={adminBusyId}
-									pay={bankPay}
-									setPay={setBankPay}
-									refund={bankRefund}
-									setRefund={setBankRefund}
-									evidenceMsg={bankEvidenceMsg}
-									setEvidenceMsg={setBankEvidenceMsg}
-									call={bankAdminCall}
-								/>
-							</div>
-						) : null}
 						<p className="text-xs text-[#b8ac90]">
 							Card payments are processed by Infini; the methods offered depend
 							on the merchant account. Online orders are credited only after

@@ -115,6 +115,7 @@ const MIGRATIONS = [
 	"ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS buyer_name text",
 	"ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS payload jsonb",
 	"ALTER TABLE purchase_receipt_outbox ADD COLUMN IF NOT EXISTS first_attempt_at timestamptz",
+	"ALTER TABLE bank_orders ADD COLUMN IF NOT EXISTS credited_tokens int",
 	"ALTER TABLE runs DROP CONSTRAINT IF EXISTS runs_status_check",
 	"ALTER TABLE runs ADD CONSTRAINT runs_status_check CHECK(status IN ('pending','queued','processing','completed','failed'))",
 	"ALTER TABLE runs ADD COLUMN IF NOT EXISTS aspect_ratio text",
